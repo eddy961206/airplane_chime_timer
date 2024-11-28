@@ -126,7 +126,8 @@ const UIController = {
         intervalSelect: $('#intervalSelect'),
         volumeSlider: $('#volumeSlider'),
         volumeValue: $('#volumeValue'),
-        nextChimeTime: $('#nextChimeTime')
+        nextChimeTime: $('#nextChimeTime'),
+        sections: $('.container .section').not(':first') // 첫 번째 섹션(토글)을 제외한 모든 섹션
     },
     
     // UI 초기화
@@ -142,11 +143,19 @@ const UIController = {
         this.elements.volumeSlider.val(settings.volume);
         this.elements.volumeValue.text(settings.volume + '%');
         
+        // 섹션 활성화/비활성화 상태 설정
+        this.updateSectionsState(settings.isActive);
+        
         // 다음 알림 시간 업데이트
         this.updateNextChimeTime(settings.interval);
         
         // 이벤트 리스너 설정
         this.setupEventListeners();
+    },
+    
+    // 섹션 활성화/비활성화 상태 업데이트
+    updateSectionsState: function(isActive) {
+        this.elements.sections.toggleClass('disabled', !isActive);
     },
     
     // 이벤트 리스너 설정
@@ -156,6 +165,7 @@ const UIController = {
             const isActive = $(this).prop('checked');
             await Settings.save({ isActive });
             chrome.runtime.sendMessage({ type: 'toggleTimer', isActive });
+            UIController.updateSectionsState(isActive);
         });
         
         // 사운드 선택 (동적으로 생성된 요소에 대한 이벤트 위임)
