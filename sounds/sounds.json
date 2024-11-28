@@ -2,22 +2,22 @@
   "sounds": [
     {
       "value": "chime1",
-      "name": "Airplane Chime 1",
+      "name": "Single Chime",
       "filename": "one-chime-airplane-made-with-Voicemod.mp3"
     },
     {
       "value": "chime2",
-      "name": "Airplane Chime 2",
+      "name": "Double Chime",
       "filename": "airplane-ding-dong-sound-effect-made-with-Voicemod.mp3"
     },
     {
       "value": "chime3",
-      "name": "Airplane Chime 3",
+      "name": "Double Chime with noise",
       "filename": "chime-104522.mp3"
     },
     {
       "value": "chime4",
-      "name": "Airplane Chime 4",
+      "name": "Triple Chime",
       "filename": "a320-tritone-chime-104562.mp3"
     }
   ]
