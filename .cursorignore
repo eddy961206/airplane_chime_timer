@@ -1,0 +1,11 @@
+# Ignore all files in the `dist` directory
+_locales/
+assets/images/
+thirdParty/
+icons/
+
+# Ignore all `.log` files
+*.md
+
+# Ignore specific file `config.json`
+privacy_policy.html

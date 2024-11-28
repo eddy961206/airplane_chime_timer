@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Airplane Chime Timer</title>
+    <link rel="stylesheet" type="text/css" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Airplane Chime Timer</h1>
+        
+        <!-- 알림 ON/OFF 토글 -->
+        <div class="section">
+            <label class="switch">
+                <input type="checkbox" id="timerToggle">
+                <span class="slider round"></span>
+            </label>
+            <span class="toggle-label">Timer Active</span>
+        </div>
+
+        <!-- 사운드 선택 -->
+        <div class="section">
+            <h2>Chime Sound</h2>
+            <div id="soundOptions" class="sound-options">
+                <!-- 사운드 옵션이 여기에 동적으로 추가됩니다 -->
+            </div>
+        </div>
+
+        <!-- 시간 간격 선택 -->
+        <div class="section">
+            <h2>Interval</h2>
+            <select id="intervalSelect">
+                <option value="15">Every 15 minutes</option>
+                <option value="30">Every 30 minutes</option>
+                <option value="60">Every hour</option>
+            </select>
+        </div>
+
+        <!-- 볼륨 조절 -->
+        <div class="section">
+            <h2>Volume</h2>
+            <input type="range" id="volumeSlider" min="0" max="100" value="50">
+            <span id="volumeValue">50%</span>
+        </div>
+
+        <!-- 다음 알림 시간 표시 -->
+        <div class="section">
+            <p>Next chime at: <span id="nextChimeTime">--:--</span></p>
+        </div>
+    </div>
+
+    <script src="thirdParty/jquery-3.6.0.min.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html> 
