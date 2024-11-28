@@ -14,6 +14,11 @@
       "value": "chime3",
       "name": "Airplane Chime 3",
       "filename": "chime-104522.mp3"
+    },
+    {
+      "value": "chime4",
+      "name": "Airplane Chime 4",
+      "filename": "a320-tritone-chime-104562.mp3"
     }
   ]
 } 
