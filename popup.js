@@ -2,14 +2,18 @@
 const Settings = {
     // 설정 저장
     save: async function(settings) {
-        return chrome.storage.local.set(settings);
+        await chrome.storage.local.set(settings);
+        // 사운드 관련 설정이 변경되면 background script에 알림
+        if (settings.selectedSound !== undefined || settings.volume !== undefined) {
+            chrome.runtime.sendMessage({ type: 'updateSound' });
+        }
     },
     
     // 설정 로드
     load: async function() {
         return chrome.storage.local.get({
             isActive: false,
-            selectedSound: '',  // 기본값을 비워둠 (첫 번째 발견된 사운드로 설정될 예정)
+            selectedSound: 'chime1',
             interval: 15,
             volume: 50
         });
@@ -69,26 +73,39 @@ const SoundManager = {
 const AudioController = {
     audio: new Audio(),
     
-    // 사운드 테스트
-    playTest: async function(soundName, volume) {
-        const sounds = await SoundManager.getSoundFiles();
-        const sound = sounds.find(s => s.value === soundName);
-        if (sound) {
-            this.audio.src = `sounds/${sound.filename}`;
-            this.audio.volume = volume / 100;
-            this.audio.play();
+    // sounds.json에서 사운드 정보 가져오기
+    async getSoundInfo(soundName) {
+        try {
+            const response = await fetch(chrome.runtime.getURL('sounds/sounds.json'));
+            const data = await response.json();
+            return data.sounds.find(sound => sound.value === soundName);
+        } catch (error) {
+            console.error('Error loading sounds.json:', error);
+            return null;
         }
     },
-
-    // 실제 알림음 재생
-    playChime: async function() {
-        const settings = await Settings.load();
-        const sounds = await SoundManager.getSoundFiles();
-        const sound = sounds.find(s => s.value === settings.selectedSound);
-        if (sound) {
-            this.audio.src = `sounds/${sound.filename}`;
-            this.audio.volume = settings.volume / 100;
-            this.audio.play();
+    
+    // 사운드 테스트
+    playTest: async function(soundName, volume) {
+        try {
+            const soundInfo = await this.getSoundInfo(soundName);
+            if (!soundInfo) {
+                throw new Error(`Sound info not found for: ${soundName}`);
+            }
+            
+            const volumeValue = volume / 100;
+            const soundUrl = chrome.runtime.getURL(`sounds/${soundInfo.filename}`);
+            
+            this.audio.src = soundUrl;
+            this.audio.volume = volumeValue;
+            await this.audio.play();
+            console.log('Test sound played successfully:', {
+                soundName: soundInfo.value,
+                filename: soundInfo.filename,
+                volume: volumeValue
+            });
+        } catch (error) {
+            console.error('Error playing test sound:', error);
         }
     }
 };

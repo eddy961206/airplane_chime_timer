@@ -5,7 +5,8 @@
   "description": "Get notified with airplane chime sounds at regular intervals",
   "permissions": [
     "storage",
-    "alarms"
+    "alarms",
+    "offscreen"
   ],
   "background": {
     "service_worker": "background.js",
@@ -26,7 +27,10 @@
     "128": "icons/icon128.png"
   },
   "web_accessible_resources": [{
-    "resources": ["sounds/*", "sounds/sounds.json"],
+    "resources": ["sounds/*", "sounds/sounds.json", "audio-player.html", "audio-player.js"],
     "matches": ["<all_urls>"]
-  }]
+  }],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; media-src 'self'"
+  }
 } 
