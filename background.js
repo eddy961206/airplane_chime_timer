@@ -21,6 +21,17 @@ const AlarmManager = {
     }
 };
 
+// 배지 관리자
+const BadgeManager = {
+    // 배지 텍스트 설정
+    setBadgeText: function(isActive) {
+        chrome.action.setBadgeText({ text: isActive ? 'ON' : 'OFF' });
+        chrome.action.setBadgeBackgroundColor({ 
+            color: isActive ? '#4CAF50' : '#9e9e9e' 
+        });
+    }
+};
+
 // 메시지 리스너 설정
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     switch (message.type) {
@@ -32,6 +43,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             } else {
                 AlarmManager.clearAlarm();
             }
+            BadgeManager.setBadgeText(message.isActive);
             break;
             
         case 'updateInterval':
@@ -59,4 +71,11 @@ chrome.runtime.onInstalled.addListener(async () => {
     if (settings.isActive) {
         AlarmManager.createAlarm(settings.interval);
     }
+    BadgeManager.setBadgeText(settings.isActive || false);
+});
+
+// 브라우저 시작 시 배지 상태 복원
+chrome.runtime.onStartup.addListener(async () => {
+    const settings = await chrome.storage.local.get(['isActive']);
+    BadgeManager.setBadgeText(settings.isActive || false);
 }); 
