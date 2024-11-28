@@ -1,3 +1,12 @@
+chrome.runtime.onInstalled.addListener((details) => {
+    if (details.reason === 'install') {
+      // 웰컴 페이지 열기
+      chrome.tabs.create({
+        url: 'welcome.html'
+      });
+    }
+});
+
 // 오디오 플레이어 관리자
 const AudioManager = {
     // 오디오 플레이어 초기화

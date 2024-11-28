@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Welcome to Airplane Chime Timer</title>
+    <style>
+        body {
+            width: 100%;
+            max-width: 800px;
+            margin: 60px auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            line-height: 1.8;
+            color: #333;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: #fff;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .logo {
+            width: 128px;
+            height: 128px;
+            margin-bottom: 20px;
+            transition: transform 0.3s ease;
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.1));
+        }
+        
+        .logo:hover {
+            transform: scale(1.05);
+            filter: drop-shadow(0 6px 12px rgba(0,0,0,0.15));
+        }
+        
+        h1 {
+            color: #2c3e50;
+            font-size: 42px;
+            margin: 0 0 50px 0;
+            text-align: center;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+        
+        .key-points {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            text-align: left;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .key-points li {
+            margin-bottom: 25px;
+            padding-left: 40px;
+            position: relative;
+            font-size: 24px;
+            color: #2c3e50;
+            line-height: 1.4;
+        }
+        
+        .key-points li:before {
+            content: "•";
+            color: #4CAF50;
+            font-size: 32px;
+            position: absolute;
+            left: 0;
+            top: -4px;
+        }
+        
+        .key-points li:last-child {
+            margin-bottom: 0;
+        }
+        
+        .coming-soon {
+            margin-top: 50px;
+            padding-top: 30px;
+            border-top: 1px solid #eee;
+            color: #666;
+            font-style: italic;
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="icons/icon128.png" alt="Logo" class="logo">
+        <h1>Airplane Chime Timer</h1>
+        <ul class="key-points">
+            <li>Plays airplane chime sounds at regular intervals (15min, 30min, or 1hour) - example: 15:00, 15:30, 16:00</li>
+            <li>No popup notifications - audio only</li>
+            <li>Chimes exactly at :00 seconds of each interval</li>
+        </ul>
+        <div class="coming-soon">
+            Coming Soon: Custom sound upload feature
+        </div>
+    </div>
+</body>
+</html> 
