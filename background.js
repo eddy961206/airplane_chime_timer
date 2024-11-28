@@ -85,31 +85,44 @@ const AlarmManager = {
             interval = 15; // 기본값 설정
         }
         
-        // 현재 시간에서 다음 간격까지의 시간 계산
+        // 현재 시간 정보 가져오기
         const now = new Date();
         const minutes = now.getMinutes();
+        const seconds = now.getSeconds();
+        
+        // 다음 간격까지의 시간 계산
         const nextMinutes = Math.ceil(minutes / interval) * interval;
         let delayInMinutes = nextMinutes - minutes;
-        // let delayInMinutes = 0.1;
         
         // delayInMinutes가 0이면 다음 간격으로 설정
         if (delayInMinutes <= 0) {
             delayInMinutes = parseInt(interval);
         }
         
+        // 초를 고려한 정확한 지연 시간 계산
+        const delayMinutesExact = delayInMinutes - (seconds / 60);
+        
+        // 다음 알람 시간 계산
+        const nextAlarmTime = new Date(now.getTime() + delayInMinutes * 60000);
+        nextAlarmTime.setSeconds(0); // 정확히 0초로 설정
+        
         console.log('Creating alarm with:', {
             interval: interval,
-            delayInMinutes: delayInMinutes,
-            currentMinutes: minutes,
-            nextMinutes: nextMinutes,
             currentTime: now.toLocaleTimeString(),
-            nextAlarmTime: new Date(now.getTime() + delayInMinutes * 60000).toLocaleTimeString()
+            delayInMinutes: delayMinutesExact,
+            nextAlarmTime: nextAlarmTime.toLocaleTimeString(),
+            currentSeconds: seconds
         });
         
         // 알람 생성
         chrome.alarms.create('chimeAlarm', {
-            delayInMinutes: delayInMinutes,
+            delayInMinutes: delayMinutesExact,
             periodInMinutes: parseInt(interval)
+        });
+        
+        // 다음 알람 시간 저장
+        chrome.storage.local.set({
+            nextAlarmTime: nextAlarmTime.toLocaleTimeString()
         });
     },
     
@@ -159,23 +172,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // 알람 리스너 설정
 chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === 'chimeAlarm') {
-        // 다음 알람 시간 계산을 위해 현재 설정 가져오기
+        const now = new Date();
+        console.log('Alarm triggered at:', now.toLocaleTimeString());
+        
+        // 현재 설정 가져오기
         const settings = await chrome.storage.local.get(['interval']);
         const interval = settings.interval || 15;
-        const now = new Date();
-        const nextAlarm = new Date(now.getTime() + interval * 60000);
-
-        console.log('Alarm cycle:', {
-            currentTime: now.toLocaleTimeString(),
-            nextAlarmTime: nextAlarm.toLocaleTimeString(),
-            interval: interval
-        });
-
-        await AudioManager.playSound();
         
-        // 현재 활성화된 모든 알람 정보 출력
-        const activeAlarms = await chrome.alarms.getAll();
-        console.log('Active alarms:', activeAlarms);
+        // 다음 알람 시간 계산 및 저장
+        const nextAlarm = new Date(now.getTime() + interval * 60000);
+        nextAlarm.setSeconds(0); // 정확히 0초로 설정
+        
+        chrome.storage.local.set({
+            nextAlarmTime: nextAlarm.toLocaleTimeString()
+        });
+        
+        await AudioManager.playSound();
     }
 });
 
