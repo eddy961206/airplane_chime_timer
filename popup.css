@@ -1,6 +1,6 @@
 body {
     width: 300px;
-    padding: 15px;
+    padding: 12px;
     font-family: Arial, sans-serif;
     margin: 0;
 }
@@ -8,29 +8,33 @@ body {
 .container {
     background-color: #f8f9fa;
     border-radius: 8px;
-    padding: 15px;
+    padding: 12px;
 }
 
 h1 {
-    font-size: 18px;
-    margin: 0 0 15px 0;
+    font-size: 16px;
+    margin: 0 0 12px 0;
     color: #2c3e50;
     text-align: center;
 }
 
 h2 {
-    font-size: 14px;
-    margin: 0 0 10px 0;
+    font-size: 13px;
+    margin: 0 0 8px 0;
     color: #34495e;
 }
 
 .section {
-    margin-bottom: 20px;
-    padding: 15px;
+    margin-bottom: 12px;
+    padding: 10px;
     background: white;
-    border-radius: 10px;
+    border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     transition: all 0.3s ease;
+}
+
+.section:last-child {
+    margin-bottom: 0;
 }
 
 .section:hover {
@@ -42,16 +46,16 @@ h2 {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 5px 0;
+    padding: 2px 0;
 }
 
 /* 토글 스위치 스타일 */
 .switch {
     position: relative;
     display: inline-block;
-    width: 52px;
-    height: 26px;
-    margin-right: 10px;
+    width: 46px;
+    height: 24px;
+    margin-right: 8px;
 }
 
 .switch input {
@@ -75,8 +79,8 @@ h2 {
 .slider:before {
     position: absolute;
     content: "";
-    height: 18px;
-    width: 18px;
+    height: 16px;
+    width: 16px;
     left: 4px;
     bottom: 4px;
     background-color: white;
@@ -84,16 +88,14 @@ h2 {
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
-/* 활성화된 상태 스타일 */
 input:checked + .slider {
     background-color: #4CAF50;
 }
 
 input:checked + .slider:before {
-    transform: translateX(26px);
+    transform: translateX(22px);
 }
 
-/* 호버 효과 */
 .slider:hover {
     box-shadow: 0 0 1px #4CAF50;
 }
@@ -102,7 +104,6 @@ input:checked + .slider:hover {
     background-color: #45a049;
 }
 
-/* 비활성화 상태 호버 */
 .slider:hover:before {
     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
@@ -116,15 +117,14 @@ input:checked + .slider:hover {
 }
 
 .toggle-label {
-    font-size: 14px;
+    font-size: 13px;
     color: #2c3e50;
     font-weight: 500;
-    margin-left: 10px;
+    margin-left: 8px;
     user-select: none;
     transition: color 0.3s ease;
 }
 
-/* 토글 활성화시 라벨 색상 변경 */
 input:checked ~ .toggle-label {
     color: #4CAF50;
 }
@@ -133,17 +133,18 @@ input:checked ~ .toggle-label {
 .sound-options {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 6px;
 }
 
 .sound-options label {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     cursor: pointer;
-    padding: 8px;
-    border-radius: 6px;
+    padding: 4px 6px;
+    border-radius: 4px;
     transition: background-color 0.2s ease;
+    font-size: 13px;
 }
 
 .sound-options label:hover {
@@ -153,12 +154,13 @@ input:checked ~ .toggle-label {
 /* 간격 선택 드롭다운 */
 select {
     width: 100%;
-    padding: 8px;
+    padding: 6px;
     border: 1px solid #ddd;
-    border-radius: 6px;
+    border-radius: 4px;
     background-color: white;
     cursor: pointer;
     transition: all 0.2s ease;
+    font-size: 13px;
 }
 
 select:hover {
@@ -174,7 +176,7 @@ select:focus {
 /* 볼륨 슬라이더 */
 input[type="range"] {
     width: 100%;
-    margin: 10px 0;
+    margin: 8px 0;
     -webkit-appearance: none;
     background: transparent;
 }
@@ -189,12 +191,12 @@ input[type="range"]::-webkit-slider-runnable-track {
 
 input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
-    height: 16px;
-    width: 16px;
+    height: 14px;
+    width: 14px;
     border-radius: 50%;
     background: #4CAF50;
     cursor: pointer;
-    margin-top: -6px;
+    margin-top: -5px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     transition: all 0.2s ease;
 }
@@ -206,15 +208,22 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 #volumeValue {
     display: inline-block;
-    min-width: 45px;
+    min-width: 40px;
     text-align: right;
     color: #4CAF50;
     font-weight: 500;
+    font-size: 13px;
 }
 
 /* 다음 알림 시간 */
 #nextChimeTime {
     font-weight: bold;
     color: #4CAF50;
-    font-size: 1.1em;
+    font-size: 1em;
+}
+
+/* 마지막 섹션의 텍스트 */
+.section:last-child p {
+    margin: 0;
+    font-size: 13px;
 } 
