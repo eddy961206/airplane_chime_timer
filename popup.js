@@ -291,6 +291,7 @@ const UIController = {
     // 섹션 활성화/비활성화 상태 업데이트
     updateSectionsState: function(isActive) {
         this.elements.sections.toggleClass('disabled', !isActive);
+        $('.next-chime-container').toggleClass('disabled', !isActive);
     },
     
     // 이벤트 리스너 설정
