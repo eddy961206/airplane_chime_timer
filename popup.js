@@ -358,8 +358,8 @@ const UIController = {
                 try {
                     const customSound = await SoundManager.handleCustomSound(file);
                     // 업로드 성공 시 해당 사운드로 변경하고 테스트 재생
-                    await Settings.save({ selectedSound: 'custom' });
-                    AudioController.playTest('custom', UIController.elements.volumeSlider.val());
+                    await Settings.save({ selectedSound: customSound.value });
+                    AudioController.playTest(customSound.value, UIController.elements.volumeSlider.val());
                 } catch (error) {
                     // 에러 처리는 handleCustomSound 내에서 수행
                     this.value = ''; // 파일 입력 초기화
