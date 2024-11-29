@@ -119,9 +119,6 @@ const SoundManager = {
             // 사운드 옵션 UI 업데이트
             await this.createSoundOptions(newSound.value);
             
-            // 커스텀 사운드 목록 UI 업데이트
-            this.updateCustomSoundList();
-            
             return newSound;
         } catch (error) {
             console.error('Failed to process custom sound:', error);
@@ -145,39 +142,10 @@ const SoundManager = {
             
             // UI 업데이트
             await this.createSoundOptions(selectedSound === soundId ? 'chime1' : selectedSound);
-            this.updateCustomSoundList();
         } catch (error) {
             console.error('Failed to delete custom sound:', error);
             alert('Failed to delete custom sound');
         }
-    },
-
-    // 커스텀 사운드 목록 UI 업데이트
-    updateCustomSoundList: async function() {
-        const { customSounds = [] } = await chrome.storage.local.get('customSounds');
-        const container = $('.custom-sound-list');
-        container.empty();
-
-        customSounds.forEach(sound => {
-            const item = $('<div>', {
-                class: 'custom-sound-item',
-                'data-sound-id': sound.value
-            });
-
-            const name = $('<span>', {
-                class: 'sound-name',
-                text: sound.name
-            });
-
-            const deleteBtn = $('<button>', {
-                class: 'delete-btn',
-                html: '&times;',
-                title: 'Delete sound'
-            }).on('click', () => this.deleteCustomSound(sound.value));
-
-            item.append(name, deleteBtn);
-            container.append(item);
-        });
     },
 
     // 파일을 Base64로 변환
@@ -303,9 +271,6 @@ const UIController = {
         
         // 사운드 옵션 동적 생성
         await SoundManager.createSoundOptions(settings.selectedSound);
-        
-        // 커스텀 사운드 목록 업데이트
-        await SoundManager.updateCustomSoundList();
         
         // 설정값으로 UI 업데이트
         this.elements.timerToggle.prop('checked', settings.isActive);
