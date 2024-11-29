@@ -25,17 +25,22 @@ const SoundManager = {
     // 사운드 파일 목록 가져오기
     getSoundFiles: async function() {
         try {
+            // 기본 사운드 가져오기
             const response = await fetch(chrome.runtime.getURL('sounds/sounds.json'));
             const data = await response.json();
+            
+            // 저장된 커스텀 사운드 가져오기
+            const { customSound } = await chrome.storage.local.get('customSound');
+            
+            // 커스텀 사운드가 있으면 목록에 추가
+            if (customSound) {
+                data.sounds.push(customSound);
+            }
+            
             return data.sounds;
         } catch (error) {
             console.error('사운드 파일 로드 실패:', error);
-            // 기본 사운드 목록 반환
-            return [
-                { value: 'chime1', name: 'Chime 1', filename: 'chime1.mp3' },
-                { value: 'chime2', name: 'Chime 2', filename: 'chime2.mp3' },
-                { value: 'chime3', name: 'Chime 3', filename: 'chime3.mp3' }
-            ];
+            return [];
         }
     },
 
@@ -66,12 +71,61 @@ const SoundManager = {
         });
 
         return sounds;
+    },
+
+    // 커스텀 사운드 처리
+    handleCustomSound: async function(file) {
+        try {
+            // 파일 크기 체크 (1MB 제한)
+            if (file.size > 1024 * 1024) {
+                throw new Error('파일 크기는 1MB를 초과할 수 없습니다.');
+            }
+
+            // 지원되는 파일 형식 체크
+            if (!file.type.startsWith('audio/')) {
+                throw new Error('오디오 파일만 업로드할 수 있습니다.');
+            }
+
+            // 파일을 Base64로 변환
+            const base64Sound = await this.fileToBase64(file);
+            
+            // 커스텀 사운드 저장
+            const customSound = {
+                value: 'custom',
+                name: 'Custom Sound',
+                filename: file.name,
+                data: base64Sound
+            };
+
+            // storage에 저장
+            await chrome.storage.local.set({ customSound });
+
+            // 사운드 옵션 UI 업데이트
+            await this.createSoundOptions('custom');
+            
+            return customSound;
+        } catch (error) {
+            console.error('커스텀 사운드 처리 실패:', error);
+            alert(error.message);
+            throw error;
+        }
+    },
+
+    // 파일을 Base64로 변환
+    fileToBase64: function(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
     }
 };
 
 // 오디오 컨트롤러
 const AudioController = {
     audio: new Audio(),
+    blobUrl: null, // Blob URL 저장용 변수 추가
     
     // sounds.json에서 사운드 정보 가져오기
     async getSoundInfo(soundName) {
@@ -88,24 +142,60 @@ const AudioController = {
     // 사운드 테스트
     playTest: async function(soundName, volume) {
         try {
-            const soundInfo = await this.getSoundInfo(soundName);
-            if (!soundInfo) {
-                throw new Error(`Sound info not found for: ${soundName}`);
+            let soundUrl;
+            
+            if (soundName === 'custom') {
+                // 커스텀 사운드인 경우 storage에서 직접 데이터 가져오기
+                const { customSound } = await chrome.storage.local.get('customSound');
+                if (!customSound) {
+                    throw new Error('커스텀 사운드를 찾을 수 없습니다.');
+                }
+                
+                // 기존 Blob URL 해제
+                if (this.blobUrl) {
+                    URL.revokeObjectURL(this.blobUrl);
+                }
+                
+                // Base64 데이터를 Blob으로 변환
+                const base64Data = customSound.data.split(',')[1];
+                const byteCharacters = atob(base64Data);
+                const byteNumbers = new Array(byteCharacters.length);
+                
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], { type: 'audio/mpeg' });
+                
+                // Blob URL 생성
+                this.blobUrl = URL.createObjectURL(blob);
+                soundUrl = this.blobUrl;
+            } else {
+                // 기본 사운드인 경우 기존 로직 사용
+                const soundInfo = await this.getSoundInfo(soundName);
+                if (!soundInfo) {
+                    throw new Error(`Sound info not found for: ${soundName}`);
+                }
+                soundUrl = chrome.runtime.getURL(`sounds/${soundInfo.filename}`);
             }
             
             const volumeValue = volume / 100;
-            const soundUrl = chrome.runtime.getURL(`sounds/${soundInfo.filename}`);
-            
             this.audio.src = soundUrl;
             this.audio.volume = volumeValue;
             await this.audio.play();
-            console.log('Test sound played successfully:', {
-                soundName: soundInfo.value,
-                filename: soundInfo.filename,
-                volume: volumeValue
-            });
+            
         } catch (error) {
             console.error('Error playing test sound:', error);
+            alert('사운드 재생 중 오류가 발생했습니다.');
+        }
+    },
+    
+    // 리소스 정리
+    cleanup: function() {
+        if (this.blobUrl) {
+            URL.revokeObjectURL(this.blobUrl);
+            this.blobUrl = null;
         }
     }
 };
@@ -143,7 +233,7 @@ const UIController = {
         this.elements.volumeSlider.val(settings.volume);
         this.elements.volumeValue.text(settings.volume + '%');
         
-        // 섹션 활성화/비활성화 상태 설정
+        // 섹션 활성화/비활성화 상태 정
         this.updateSectionsState(settings.isActive);
         
         // 다음 알림 시간 업데이트
@@ -195,6 +285,22 @@ const UIController = {
             const selectedSound = $('input[name="sound"]:checked').val();
             AudioController.playTest(selectedSound, volume);
         });
+
+        // 커스텀 사운드 파일 업로드 처리
+        $('#customSoundInput').on('change', async function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                try {
+                    const customSound = await SoundManager.handleCustomSound(file);
+                    // 업로드 성공 시 해당 사운드로 변경하고 테스트 재생
+                    await Settings.save({ selectedSound: 'custom' });
+                    AudioController.playTest('custom', UIController.elements.volumeSlider.val());
+                } catch (error) {
+                    // 에러 처리는 handleCustomSound 내에서 수행
+                    this.value = ''; // 파일 입력 초기화
+                }
+            }
+        });
     },
     
     // 다음 알림 시간 업데이트
@@ -220,4 +326,9 @@ const UIController = {
 // 팝업 초기화
 $(document).ready(() => {
     UIController.init();
+});
+
+// 팝업 창이 닫힐 때 리소스 정리
+window.addEventListener('unload', () => {
+    AudioController.cleanup();
 }); 

@@ -6,7 +6,8 @@
   "permissions": [
     "storage",
     "alarms",
-    "offscreen"
+    "offscreen",
+    "unlimitedStorage"
   ],
   "background": {
     "service_worker": "background.js",
@@ -37,6 +38,6 @@
     "matches": ["<all_urls>"]
   }],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; media-src 'self'"
+    "extension_pages": "script-src 'self'; object-src 'self'; media-src 'self' data:"
   }
 } 

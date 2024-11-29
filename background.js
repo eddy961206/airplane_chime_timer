@@ -9,6 +9,8 @@ chrome.runtime.onInstalled.addListener((details) => {
 
 // 오디오 플레이어 관리자
 const AudioManager = {
+    blobUrl: null,
+    
     // 오디오 플레이어 초기화
     async createOffscreenDocument() {
         try {
@@ -45,36 +47,61 @@ const AudioManager = {
     // 사운드 재생
     async playSound() {
         try {
-            // offscreen 문서가 없으면 생성
             await this.createOffscreenDocument();
             
-            // 설정 가져오기
             const settings = await chrome.storage.local.get(['selectedSound', 'volume']);
             const soundName = settings.selectedSound || 'chime1';
             const volume = settings.volume || 50;
             
-            // sounds.json에서 실제 파일명 가져오기
-            const soundInfo = await this.getSoundInfo(soundName);
-            if (!soundInfo) {
-                throw new Error(`Sound info not found for: ${soundName}`);
+            let soundUrl;
+            let filename;
+            
+            if (soundName === 'custom') {
+                const { customSound } = await chrome.storage.local.get('customSound');
+                if (!customSound) {
+                    throw new Error('커스텀 사운드를 찾을 수 없습니다.');
+                }
+                
+                // 기존 Blob URL 해제
+                if (this.blobUrl) {
+                    URL.revokeObjectURL(this.blobUrl);
+                }
+                
+                // Base64 데이터를 Blob으로 변환
+                const base64Data = customSound.data.split(',')[1];
+                const byteCharacters = atob(base64Data);
+                const byteNumbers = new Array(byteCharacters.length);
+                
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], { type: 'audio/mpeg' });
+                
+                // Blob URL 생성
+                this.blobUrl = URL.createObjectURL(blob);
+                soundUrl = this.blobUrl;
+                filename = customSound.filename;
+            } else {
+                const soundInfo = await this.getSoundInfo(soundName);
+                if (!soundInfo) {
+                    throw new Error(`Sound info not found for: ${soundName}`);
+                }
+                soundUrl = chrome.runtime.getURL(`sounds/${soundInfo.filename}`);
+                filename = soundInfo.filename;
             }
             
-            // 설정값과 함께 메시지 전송
             await chrome.runtime.sendMessage({ 
                 type: 'playSound',
-                soundName: soundInfo.value,
-                filename: soundInfo.filename,
-                volume: volume
+                soundName,
+                soundUrl,
+                filename,
+                volume
             });
-            console.log('Playback requested with:', { 
-                soundName: soundInfo.value, 
-                filename: soundInfo.filename, 
-                volume,
-                time: new Date().toLocaleTimeString()
-            });
+            
         } catch (error) {
             console.error('Error requesting sound playback:', error);
-            // 오류 발생 시 offscreen 문서 재생성 시도
             try {
                 await chrome.offscreen.closeDocument();
                 await this.createOffscreenDocument();
@@ -82,8 +109,20 @@ const AudioManager = {
                 console.error('Error recreating offscreen document:', e);
             }
         }
+    },
+    
+    cleanup: function() {
+        if (this.blobUrl) {
+            URL.revokeObjectURL(this.blobUrl);
+            this.blobUrl = null;
+        }
     }
 };
+
+// 확장 프로그램이 종료될 때 리소스 정리
+chrome.runtime.onSuspend.addListener(() => {
+    AudioManager.cleanup();
+});
 
 // 알람 관리자
 const AlarmManager = {

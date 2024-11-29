@@ -261,4 +261,32 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .section:last-child p {
     margin: 0;
     font-size: 13px;
+}
+
+.custom-sound-upload {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #eee;
+}
+
+.custom-sound-upload h3 {
+    font-size: 12px;
+    margin: 0 0 8px 0;
+    color: #34495e;
+}
+
+.custom-sound-info {
+    margin-top: 8px;
+}
+
+.custom-sound-info small {
+    display: block;
+    color: #666;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+#customSoundInput {
+    width: 100%;
+    font-size: 12px;
 } 
