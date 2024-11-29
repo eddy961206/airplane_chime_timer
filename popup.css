@@ -180,10 +180,31 @@ input:checked ~ .toggle-label {
     border-radius: 4px;
     transition: background-color 0.2s ease;
     font-size: 13px;
+    position: relative;
 }
 
 .sound-options label:hover {
     background-color: #f5f5f5;
+}
+
+.sound-delete-btn {
+    background: none;
+    border: none;
+    color: #dc3545;
+    cursor: pointer;
+    padding: 2px 6px;
+    font-size: 16px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    margin-left: auto;
+}
+
+.sound-options label:hover .sound-delete-btn {
+    opacity: 0.7;
+}
+
+.sound-delete-btn:hover {
+    opacity: 1 !important;
 }
 
 /* 간격 선택 드롭다운 */

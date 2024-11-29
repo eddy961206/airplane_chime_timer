@@ -62,6 +62,21 @@ const SoundManager = {
             
             label.append(input);
             label.append(sound.name);
+            
+            // 커스텀 사운드인 경우 삭제 버튼 추가
+            if (sound.value.startsWith('custom_')) {
+                const deleteBtn = $('<button>', {
+                    class: 'delete-btn sound-delete-btn',
+                    html: '&times;',
+                    title: 'Delete sound'
+                }).on('click', (e) => {
+                    e.preventDefault(); // 라디오 버튼 선택 방지
+                    this.deleteCustomSound(sound.value);
+                });
+                
+                label.append(deleteBtn);
+            }
+            
             container.append(label);
         });
 
