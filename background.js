@@ -59,7 +59,7 @@ const AudioManager = {
             if (soundName === 'custom') {
                 const { customSound } = await chrome.storage.local.get('customSound');
                 if (!customSound) {
-                    throw new Error('커스텀 사운드를 찾을 수 없습니다.');
+                    throw new Error('custom sound not found');
                 }
                 
                 // 기존 Blob URL 해제
