@@ -179,11 +179,18 @@ const SoundManager = {
 // 오디오 컨트롤러
 const AudioController = {
     audio: new Audio(),
-    blobUrl: null, // Blob URL 저장용 변수 추가
+    blobUrl: null,
     
     // sounds.json에서 사운드 정보 가져오기
     async getSoundInfo(soundName) {
         try {
+            // 커스텀 사운드인 경우
+            if (soundName.startsWith('custom_')) {
+                const { customSounds = [] } = await chrome.storage.local.get('customSounds');
+                return customSounds.find(sound => sound.value === soundName);
+            }
+            
+            // 기본 사운드인 경우
             const response = await fetch(chrome.runtime.getURL('sounds/sounds.json'));
             const data = await response.json();
             return data.sounds.find(sound => sound.value === soundName);
@@ -198,9 +205,10 @@ const AudioController = {
         try {
             let soundUrl;
             
-            if (soundName === 'custom') {
+            if (soundName.startsWith('custom_')) {
                 // 커스텀 사운드인 경우 storage에서 직접 데이터 가져오기
-                const { customSound } = await chrome.storage.local.get('customSound');
+                const { customSounds = [] } = await chrome.storage.local.get('customSounds');
+                const customSound = customSounds.find(sound => sound.value === soundName);
                 if (!customSound) {
                     throw new Error('커스텀 사운드를 찾을 수 없습니다.');
                 }
