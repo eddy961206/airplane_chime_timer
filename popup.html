@@ -33,7 +33,15 @@
             <!-- 커스텀 사운드 업로드 섹션 추가 -->
             <div class="custom-sound-upload">
                 <h3>Custom Sound</h3>
-                <input type="file" id="customSoundInput" accept="audio/*" />
+                <div class="custom-sound-list">
+                    <!-- 커스텀 사운드 목록이 여기에 표시됩니다 -->
+                </div>
+                <div class="custom-sound-add">
+                    <input type="file" id="customSoundInput" accept="audio/*" />
+                    <button id="addCustomSound" class="add-sound-btn">
+                        <span>Add Custom Sound</span>
+                    </button>
+                </div>
                 <div class="custom-sound-info">
                     <small>* Supported formats: MP3, WAV (max 1MB)</small>
                     <small>* Recommended duration: 1-3 seconds</small>

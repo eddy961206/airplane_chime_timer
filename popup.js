@@ -25,21 +25,16 @@ const SoundManager = {
     // 사운드 파일 목록 가져오기
     getSoundFiles: async function() {
         try {
-            // 기본 사운드 가져오기
             const response = await fetch(chrome.runtime.getURL('sounds/sounds.json'));
             const data = await response.json();
             
-            // 저장된 커스텀 사운드 가져오기
-            const { customSound } = await chrome.storage.local.get('customSound');
+            // 저장된 커스텀 사운드 목록 가져오기
+            const { customSounds = [] } = await chrome.storage.local.get('customSounds');
             
-            // 커스텀 사운드가 있으면 목록에 추가
-            if (customSound) {
-                data.sounds.push(customSound);
-            }
-            
-            return data.sounds;
+            // 기본 사운드와 커스텀 사운드 합치기
+            return [...data.sounds, ...customSounds];
         } catch (error) {
-            console.error('사운드 파일 로드 실패:', error);
+            console.error('Failed to load sound files:', error);
             return [];
         }
     },
@@ -78,37 +73,96 @@ const SoundManager = {
         try {
             // 파일 크기 체크 (1MB 제한)
             if (file.size > 1024 * 1024) {
-                throw new Error('파일 크기는 1MB를 초과할 수 없습니다.');
+                throw new Error('File size cannot exceed 1MB');
             }
 
             // 지원되는 파일 형식 체크
             if (!file.type.startsWith('audio/')) {
-                throw new Error('오디오 파일만 업로드할 수 있습니다.');
+                throw new Error('Only audio files are allowed');
             }
 
             // 파일을 Base64로 변환
             const base64Sound = await this.fileToBase64(file);
             
-            // 커스텀 사운드 저장
-            const customSound = {
-                value: 'custom',
-                name: 'Custom Sound',
+            // 현재 저장된 커스텀 사운드 목록 가져오기
+            const { customSounds = [] } = await chrome.storage.local.get('customSounds');
+            
+            // 새로운 커스텀 사운드 생성
+            const newSound = {
+                value: 'custom_' + Date.now(), // 고유 ID 생성
+                name: file.name.replace(/\.[^/.]+$/, ""), // 확장자 제거
                 filename: file.name,
                 data: base64Sound
             };
 
+            // 커스텀 사운드 목록에 추가
+            customSounds.push(newSound);
+
             // storage에 저장
-            await chrome.storage.local.set({ customSound });
+            await chrome.storage.local.set({ customSounds });
 
             // 사운드 옵션 UI 업데이트
-            await this.createSoundOptions('custom');
+            await this.createSoundOptions(newSound.value);
             
-            return customSound;
+            // 커스텀 사운드 목록 UI 업데이트
+            this.updateCustomSoundList();
+            
+            return newSound;
         } catch (error) {
-            console.error('커스텀 사운드 처리 실패:', error);
+            console.error('Failed to process custom sound:', error);
             alert(error.message);
             throw error;
         }
+    },
+
+    // 커스텀 사운드 삭제
+    deleteCustomSound: async function(soundId) {
+        try {
+            const { customSounds = [] } = await chrome.storage.local.get('customSounds');
+            const updatedSounds = customSounds.filter(sound => sound.value !== soundId);
+            await chrome.storage.local.set({ customSounds: updatedSounds });
+            
+            // 현재 선택된 사운드가 삭제되는 경우 기본 사운드로 변경
+            const { selectedSound } = await chrome.storage.local.get('selectedSound');
+            if (selectedSound === soundId) {
+                await Settings.save({ selectedSound: 'chime1' });
+            }
+            
+            // UI 업데이트
+            await this.createSoundOptions(selectedSound === soundId ? 'chime1' : selectedSound);
+            this.updateCustomSoundList();
+        } catch (error) {
+            console.error('Failed to delete custom sound:', error);
+            alert('Failed to delete custom sound');
+        }
+    },
+
+    // 커스텀 사운드 목록 UI 업데이트
+    updateCustomSoundList: async function() {
+        const { customSounds = [] } = await chrome.storage.local.get('customSounds');
+        const container = $('.custom-sound-list');
+        container.empty();
+
+        customSounds.forEach(sound => {
+            const item = $('<div>', {
+                class: 'custom-sound-item',
+                'data-sound-id': sound.value
+            });
+
+            const name = $('<span>', {
+                class: 'sound-name',
+                text: sound.name
+            });
+
+            const deleteBtn = $('<button>', {
+                class: 'delete-btn',
+                html: '&times;',
+                title: 'Delete sound'
+            }).on('click', () => this.deleteCustomSound(sound.value));
+
+            item.append(name, deleteBtn);
+            container.append(item);
+        });
     },
 
     // 파일을 Base64로 변환
@@ -226,6 +280,9 @@ const UIController = {
         
         // 사운드 옵션 동적 생성
         await SoundManager.createSoundOptions(settings.selectedSound);
+        
+        // 커스텀 사운드 목록 업데이트
+        await SoundManager.updateCustomSoundList();
         
         // 설정값으로 UI 업데이트
         this.elements.timerToggle.prop('checked', settings.isActive);

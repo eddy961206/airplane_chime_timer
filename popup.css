@@ -307,4 +307,73 @@ input[type="range"]::-webkit-slider-thumb:hover {
 #nextChimeTime {
     font-weight: bold;
     color: #4CAF50;
+}
+
+.custom-sound-list {
+    margin-bottom: 8px;
+}
+
+.custom-sound-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 8px;
+    margin-bottom: 4px;
+    background: #f5f5f5;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.custom-sound-item .sound-name {
+    flex-grow: 1;
+    margin-right: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.custom-sound-item .delete-btn {
+    background: none;
+    border: none;
+    color: #dc3545;
+    cursor: pointer;
+    padding: 2px 6px;
+    font-size: 16px;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.custom-sound-item .delete-btn:hover {
+    opacity: 1;
+}
+
+.custom-sound-add {
+    position: relative;
+    margin-bottom: 8px;
+}
+
+.custom-sound-add input[type="file"] {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.add-sound-btn {
+    width: 100%;
+    padding: 6px 12px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background-color 0.2s;
+}
+
+.add-sound-btn:hover {
+    background-color: #45a049;
 } 
