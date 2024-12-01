@@ -19,6 +19,11 @@
       "value": "chime4",
       "name": "Triple Chime",
       "filename": "a320-tritone-chime-104562.mp3"
+    },
+    {
+      "value": "chime5",
+      "name": "Airbus AP Disconnect Warning",
+      "filename": "Airbus AP Disconnect Warning.m4a"
     }
   ]
 } 
