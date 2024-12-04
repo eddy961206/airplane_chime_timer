@@ -53,7 +53,27 @@
                 <option value="15">Every 15 minutes</option>
                 <option value="30">Every 30 minutes</option>
                 <option value="60">Every hour</option>
+                <option value="custom">Custom interval...</option>
+                <option value="specificTime">Specific time...</option>
             </select>
+
+            <!-- 커스텀 인터벌 입력 -->
+            <div id="customIntervalContainer" style="display: none; margin-top: 10px;">
+                <input type="number" id="customIntervalInput" min="1" max="1440" placeholder="Enter minutes">
+                <small>* 1-1440 minutes (24 hours max)</small>
+            </div>
+
+            <!-- 특정 시각 입력 -->
+            <div id="specificTimeContainer" style="display: none; margin-top: 10px;">
+                <input type="time" id="specificTimeInput">
+                <div class="repeat-option">
+                    <label>
+                        <input type="checkbox" id="repeatDaily">
+                        Repeat daily
+                    </label>
+                </div>
+                <small>* Set a specific time for the chime to play once</small>
+            </div>
         </div>
 
         <!-- 볼륨 조절 -->
@@ -72,4 +92,4 @@
     <script src="thirdParty/jquery-3.6.0.min.js"></script>
     <script src="popup.js"></script>
 </body>
-</html> 
+</html>

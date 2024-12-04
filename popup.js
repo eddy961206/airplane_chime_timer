@@ -15,7 +15,10 @@ const Settings = {
             isActive: false,
             selectedSound: 'chime1',
             interval: 15,
-            volume: 50
+            volume: 50,
+            customInterval: 15,
+            specificTime: '',
+            repeatDaily: false
         });
     }
 };
@@ -313,7 +316,7 @@ const UIController = {
         
         // 간격 선택
         this.elements.intervalSelect.on('change', async function() {
-            const interval = parseInt($(this).val());
+            const interval = $(this).val();
             await Settings.save({ interval });
             UIController.updateNextChimeTime(interval);
             chrome.runtime.sendMessage({ type: 'updateInterval', interval });
@@ -351,21 +354,32 @@ const UIController = {
     
     // 다음 알림 시간 업데이트
     updateNextChimeTime: function(interval) {
+        const nextChimeElement = document.getElementById('nextChimeTime');
+        if (!nextChimeElement) return;
+
+        let nextTime;
         const now = new Date();
-        const minutes = now.getMinutes();
-        const nextMinutes = Math.ceil(minutes / interval) * interval;
-        const nextTime = new Date(now);
-        
-        if (nextMinutes === 60) {
-            nextTime.setHours(nextTime.getHours() + 1);
-            nextTime.setMinutes(0);
+
+        if (interval === 'specific') {
+            const [hours, minutes] = document.getElementById('specificTimeInput').value.split(':').map(Number);
+            nextTime = new Date(now);
+            nextTime.setHours(hours, minutes, 0, 0);
+            
+            if (nextTime <= now) {
+                nextTime.setDate(nextTime.getDate() + 1);
+            }
+        } else if (interval === 'custom') {
+            const customInterval = parseInt(document.getElementById('customIntervalInput').value) || 15;
+            const minutesToAdd = customInterval - (now.getMinutes() % customInterval);
+            nextTime = new Date(now.getTime() + minutesToAdd * 60000);
+            nextTime.setSeconds(0, 0);
         } else {
-            nextTime.setMinutes(nextMinutes);
+            const minutesToAdd = interval - (now.getMinutes() % interval);
+            nextTime = new Date(now.getTime() + minutesToAdd * 60000);
+            nextTime.setSeconds(0, 0);
         }
-        nextTime.setSeconds(0);
-        
-        const timeString = nextTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        this.elements.nextChimeTime.text(timeString);
+
+        nextChimeElement.textContent = nextTime.toLocaleTimeString();
     }
 };
 
@@ -377,4 +391,132 @@ $(document).ready(() => {
 // 팝업 창이 닫힐 때 리소스 정리
 window.addEventListener('unload', () => {
     AudioController.cleanup();
-}); 
+});
+
+document.addEventListener('DOMContentLoaded', async () => {
+    const intervalSelect = document.getElementById('intervalSelect');
+    const customIntervalContainer = document.getElementById('customIntervalContainer');
+    const specificTimeContainer = document.getElementById('specificTimeContainer');
+    const customIntervalInput = document.getElementById('customIntervalInput');
+    const specificTimeInput = document.getElementById('specificTimeInput');
+    const repeatDailyCheckbox = document.getElementById('repeatDaily');
+
+    // Load saved settings
+    const settings = await chrome.storage.sync.get(['interval', 'customInterval', 'specificTime', 'repeatDaily']);
+    
+    if (settings.interval) {
+        intervalSelect.value = settings.interval;
+        if (settings.interval === 'custom' && settings.customInterval) {
+            customIntervalInput.value = settings.customInterval;
+            customIntervalContainer.style.display = 'block';
+        } else if (settings.interval === 'specific' && settings.specificTime) {
+            specificTimeInput.value = settings.specificTime;
+            specificTimeContainer.style.display = 'block';
+            repeatDailyCheckbox.checked = settings.repeatDaily !== false;
+        }
+    }
+
+    // Event listeners
+    intervalSelect.addEventListener('change', async () => {
+        const selectedValue = intervalSelect.value;
+        customIntervalContainer.style.display = selectedValue === 'custom' ? 'block' : 'none';
+        specificTimeContainer.style.display = selectedValue === 'specific' ? 'block' : 'none';
+        
+        await saveSettings();
+        updateNextChimeTime();
+    });
+
+    // 커스텀 인터벌 입력 이벤트
+    customIntervalInput.addEventListener('input', debounce(async () => {
+        await saveSettings();
+        updateNextChimeTime();
+    }, 300));
+
+    // 포커스 아웃 이벤트
+    customIntervalInput.addEventListener('blur', async () => {
+        await saveSettings();
+        updateNextChimeTime();
+    });
+
+    specificTimeInput.addEventListener('change', saveSettings);
+    repeatDailyCheckbox.addEventListener('change', saveSettings);
+
+    // 팝업 닫힐 때 이벤트
+    window.addEventListener('beforeunload', async () => {
+        await saveSettings();
+        updateNextChimeTime();
+    });
+
+    // debounce 함수 정의
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
+    async function saveSettings() {
+        const settings = {
+            interval: intervalSelect.value,
+        };
+
+        if (intervalSelect.value === 'custom') {
+            settings.customInterval = parseInt(customIntervalInput.value) || 15;
+        } else if (intervalSelect.value === 'specific') {
+            settings.specificTime = specificTimeInput.value;
+            settings.repeatDaily = repeatDailyCheckbox.checked;
+        }
+
+        await chrome.storage.sync.set(settings);
+        await updateAlarm();
+    }
+
+    function updateNextChimeTime() {
+        const nextChimeElement = document.getElementById('nextChimeTime');
+        if (!nextChimeElement) return;
+
+        let nextTime;
+        const now = new Date();
+
+        if (intervalSelect.value === 'specific') {
+            const [hours, minutes] = specificTimeInput.value.split(':').map(Number);
+            nextTime = new Date(now);
+            nextTime.setHours(hours, minutes, 0, 0);
+            
+            if (nextTime <= now) {
+                nextTime.setDate(nextTime.getDate() + 1);
+            }
+        } else {
+            let interval;
+            if (intervalSelect.value === 'custom') {
+                interval = parseInt(customIntervalInput.value) || 15;
+            } else {
+                interval = parseInt(intervalSelect.value) || 15;
+            }
+            
+            const minutesToAdd = interval - (now.getMinutes() % interval);
+            nextTime = new Date(now.getTime() + minutesToAdd * 60000);
+            nextTime.setSeconds(0, 0);
+        }
+
+        nextChimeElement.textContent = nextTime.toLocaleTimeString();
+    }
+
+    async function updateAlarm() {
+        await chrome.runtime.sendMessage({ 
+            action: 'updateAlarm',
+            interval: intervalSelect.value,
+            customInterval: parseInt(customIntervalInput.value),
+            specificTime: specificTimeInput.value,
+            repeatDaily: repeatDailyCheckbox.checked
+        });
+    }
+
+    // 초기 다음 알림 시간 표시
+    updateNextChimeTime();
+});
