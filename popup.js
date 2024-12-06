@@ -542,9 +542,8 @@ $(document).ready(async () => {
         // 커스텀 인터벌 select box에서 선택돼있면
         } else if ($intervalSelect.val() === 'custom') {
             const customInterval = parseInt($customIntervalInput.val()) || 15;
-            const minutesToAdd = customInterval - (now.getMinutes() % customInterval);
-            nextTime = new Date(now.getTime() + minutesToAdd * 60000);
-            nextTime.setSeconds(0, 0);
+            nextTime = new Date(now.getTime() + customInterval * 60000); // 현재 시간에 분을 더함
+        nextTime.setSeconds(0, 0);
         // 일반 인터벌 select box에서 선택돼있면
         } else {
             const interval = parseInt($intervalSelect.val()) || 15;

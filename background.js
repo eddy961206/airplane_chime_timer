@@ -110,7 +110,15 @@ const AlarmManager = {
             const nextMinutes = Math.ceil(minutes / intervalMinutes) * intervalMinutes;
             let delayInMinutes = nextMinutes - minutes;
             // 초를 고려한 정확한 지연 시간 계산
-            const delayMinutesExact = delayInMinutes - (seconds / 60);
+            let delayMinutesExact = delayInMinutes - (seconds / 60);
+
+            /*  
+            지금 시간 기준으로 실제 다음 알람 시간이 즉시 혹은 
+            이미 지난 시간으로 계산되어 '바로' 알람이 울려버리는 경우 없애기 위함*/
+            if (delayMinutesExact <= 0) {
+                // 음수나 0인 경우 다음 인터벌을 잡아 미래 시간으로 설정
+                delayMinutesExact += intervalMinutes;
+            }
             
             // 유효성 검사
             if (intervalMinutes < 1) intervalMinutes = 15;
