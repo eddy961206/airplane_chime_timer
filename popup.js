@@ -343,14 +343,14 @@ const UIController = {
     
     // 다음 알림 시간 업데이트
     updateNextChimeTime: function(interval) {
-        const nextChimeElement = document.getElementById('nextChimeTime');
-        if (!nextChimeElement) return;
+        const $nextChimeElement = $('#nextChimeTime');
+        if (!$nextChimeElement.length) return;
 
         let nextTime;
         const now = new Date();
 
         if (interval === 'specific') {
-            const [hours, minutes] = document.getElementById('specificTimeInput').value.split(':').map(Number);
+            const [hours, minutes] = $('#specificTimeInput').val().split(':').map(Number);
             nextTime = new Date(now);
             nextTime.setHours(hours, minutes, 0, 0);
             
@@ -358,7 +358,7 @@ const UIController = {
                 nextTime.setDate(nextTime.getDate() + 1);
             }
         } else if (interval === 'custom') {
-            const customInterval = parseInt(document.getElementById('customIntervalInput').value) || 15;
+            const customInterval = parseInt($('#customIntervalInput').val()) || 15;
             const minutesToAdd = customInterval - (now.getMinutes() % customInterval);
             nextTime = new Date(now.getTime() + minutesToAdd * 60000);
             nextTime.setSeconds(0, 0);
@@ -368,7 +368,8 @@ const UIController = {
             nextTime.setSeconds(0, 0);
         }
 
-        nextChimeElement.textContent = nextTime.toLocaleTimeString();
+        const timeString = nextTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        $nextChimeElement.text(timeString);
     }
 };
 
@@ -552,7 +553,8 @@ $(document).ready(async () => {
             nextTime.setSeconds(0, 0);
         }
 
-        $nextChimeTime.text(nextTime.toLocaleTimeString());
+        const timeString = nextTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        $nextChimeTime.text(timeString);
     }
 
     async function updateAlarm() {
@@ -571,11 +573,13 @@ $(document).ready(async () => {
     // 다음 알람 시간 업데이트 메시지 리스너
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.type === 'updateNextChimeTime') {
-            const nextChimeTimeSpan = document.getElementById('nextChimeTime');
-            if (nextChimeTimeSpan) {
+            const $nextChimeTimeSpan = $('#nextChimeTime');
+            if ($nextChimeTimeSpan.length) {
                 const nextTime = new Date(message.nextChimeTime);
-                nextChimeTimeSpan.textContent = nextTime.toLocaleTimeString();
+                const timeString = nextTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                $nextChimeTimeSpan.text(timeString);
             }
         }
     });
+
 });
