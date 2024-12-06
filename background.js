@@ -82,36 +82,59 @@ const AlarmManager = {
         const now = new Date();
         const minutes = now.getMinutes();
         const seconds = now.getSeconds();
+        let nextAlarmTime; // 다음 알람 시각 저장 변수
         
         // 지정된 시각에 알람 생성
         if (interval === 'specific' && specificTime) {
             const [hours, minutes] = specificTime.split(':').map(Number);
-            const when = new Date(now);
-            when.setHours(hours, minutes, 0, 0);
+            nextAlarmTime  = new Date(now);
+            nextAlarmTime .setHours(hours, minutes, 0, 0);
             
-            if (when <= now) {
-                when.setDate(when.getDate() + 1);
+            if (nextAlarmTime  <= now) {
+                nextAlarmTime .setDate(nextAlarmTime .getDate() + 1);
             }
             
             await chrome.alarms.create('chimeAlarm', {
-                when: when.getTime(),
+                when: nextAlarmTime.getTime(),
                 periodInMinutes: repeatDaily ? 24 * 60 : undefined
             });
-        } else {
-        // 일반 인터벌 또는 커스텀 인터벌
-            let intervalMinutes;
-            if (interval === 'custom') {
-                intervalMinutes = parseInt(customInterval) || 15;
-            } else {
-                intervalMinutes = parseInt(interval) || 15;
+        } else if (interval === 'custom') {
+        // 커스텀 인터벌: 지금부터 지정된 시간 뒤에 알람 설정
+            const customIntervalMinutes = parseInt(customInterval) || 15;
+
+            // 유효성 검사
+            if (customIntervalMinutes < 1) {
+                console.warn('Invalid custom interval. Defaulting to 15 minutes.');
+                customIntervalMinutes = 15;
             }
 
+            // 다음 알람 시각 계산 (지금 시간 + 커스텀 인터벌)
+            nextAlarmTime = new Date(now.getTime() + customIntervalMinutes * 60000);
+
+            // 초와 밀리초 제거
+            nextAlarmTime.setSeconds(0, 0);
+
+            await chrome.alarms.create('chimeAlarm', {
+                delayInMinutes: customIntervalMinutes,
+                periodInMinutes: customIntervalMinutes // 반복 주기는 커스텀 인터벌
+            });
+            
+        } else {
+        // 일반 인터벌: 현재 시간 기준으로 가장 가까운 다음 시간에 설정
+            let intervalMinutes = parseInt(interval) || 15;
+    
+            // 유효성 검사
+            if (intervalMinutes < 1) {
+                console.warn('Invalid interval. Defaulting to 15 minutes.');
+                intervalMinutes = 15;
+            }
+    
             // 다음 간격까지의 시간 계산
             const nextMinutes = Math.ceil(minutes / intervalMinutes) * intervalMinutes;
             let delayInMinutes = nextMinutes - minutes;
+    
             // 초를 고려한 정확한 지연 시간 계산
             let delayMinutesExact = delayInMinutes - (seconds / 60);
-
             /*  
             지금 시간 기준으로 실제 다음 알람 시간이 즉시 혹은 
             이미 지난 시간으로 계산되어 '바로' 알람이 울려버리는 경우 없애기 위함*/
@@ -119,17 +142,17 @@ const AlarmManager = {
                 // 음수나 0인 경우 다음 인터벌을 잡아 미래 시간으로 설정
                 delayMinutesExact += intervalMinutes;
             }
-            
-            // 유효성 검사
-            if (intervalMinutes < 1) intervalMinutes = 15;
-            
+    
+            // 다음 알람 시각 계산
+            nextAlarmTime = new Date(now.getTime() + delayMinutesExact * 60000);
+    
             await chrome.alarms.create('chimeAlarm', {
                 delayInMinutes: delayMinutesExact,
                 periodInMinutes: intervalMinutes
             });
         }
         
-        console.log('Alarm created with settings:', settings);
+        console.log('Alarm created with settings:', settings, 'Next alarm at:', nextAlarmTime.toLocaleString());
     },
     
     // 알람 제거
