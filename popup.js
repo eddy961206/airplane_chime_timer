@@ -405,7 +405,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // Event listeners
+    // 인터벌 선택창 이벤트
     intervalSelect.addEventListener('change', async () => {
         const selectedValue = intervalSelect.value;
         customIntervalContainer.style.display = selectedValue === 'custom' ? 'block' : 'none';
@@ -427,8 +427,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateNextChimeTime();
     });
 
-    specificTimeInput.addEventListener('change', saveSettings);
-    repeatDailyCheckbox.addEventListener('change', saveSettings);
+    // 특정 시각 알람 입력 이벤트
+    specificTimeInput.addEventListener('change', async () => {
+        await saveSettings();
+        updateNextChimeTime();
+    });
+
+    // 특정 시각 입력 시 매일 반복 체크박스 이벤트
+    repeatDailyCheckbox.addEventListener('change', async () => {
+        await saveSettings();
+        updateNextChimeTime();
+    });
 
     // 팝업 닫힐 때 이벤트
     window.addEventListener('beforeunload', async () => {
