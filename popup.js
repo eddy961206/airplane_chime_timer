@@ -168,14 +168,8 @@ const AudioController = {
     blobUrl: null,
     
     // sounds.json에서 사운드 정보 가져오기
-    async getSoundInfo(soundName) {
+    async getSoundInfoFromJson(soundName) {
         try {
-            // 커스텀 사운드인 경우
-            if (soundName.startsWith('custom_')) {
-                const { customSounds = [] } = await chrome.storage.local.get('customSounds');
-                return customSounds.find(sound => sound.value === soundName);
-            }
-            
             // 기본 사운드인 경우
             const response = await fetch(chrome.runtime.getURL('sounds/sounds.json'));
             const data = await response.json();
@@ -191,8 +185,8 @@ const AudioController = {
         try {
             let soundUrl;
             
+            // 커스텀 사운드인 경우 storage에서 base64 데이터 가져오기
             if (soundName.startsWith('custom_')) {
-                // 커스텀 사운드인 경우 storage에서 직접 데이터 가져오기
                 const { customSounds = [] } = await chrome.storage.local.get('customSounds');
                 const customSound = customSounds.find(sound => sound.value === soundName);
                 if (!customSound) {
@@ -219,9 +213,11 @@ const AudioController = {
                 // Blob URL 생성
                 this.blobUrl = URL.createObjectURL(blob);
                 soundUrl = this.blobUrl;
+
             } else {
-                // 기본 사운드인 경우 기존 로직 사용
-                const soundInfo = await this.getSoundInfo(soundName);
+
+            // 기본 사운드인 경우 sounds.json에서 정보 가져오기
+                const soundInfo = await this.getSoundInfoFromJson(soundName);
                 if (!soundInfo) {
                     throw new Error(`Sound info not found for: ${soundName}`);
                 }
@@ -247,13 +243,6 @@ const AudioController = {
         }
     }
 };
-
-// 메시지 리스너 추가
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'playChime') {
-        AudioController.playChime();
-    }
-});
 
 // UI 컨트롤러
 const UIController = {
@@ -401,8 +390,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const specificTimeInput = document.getElementById('specificTimeInput');
     const repeatDailyCheckbox = document.getElementById('repeatDaily');
 
-    // Load saved settings
-    const settings = await chrome.storage.sync.get(['interval', 'customInterval', 'specificTime', 'repeatDaily']);
+    // 설정 로드
+    const settings = await chrome.storage.local.get(['interval', 'customInterval', 'specificTime', 'repeatDaily']);
     
     if (settings.interval) {
         intervalSelect.value = settings.interval;
@@ -472,7 +461,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             settings.repeatDaily = repeatDailyCheckbox.checked;
         }
 
-        await chrome.storage.sync.set(settings);
+        await chrome.storage.local.set(settings);
         await updateAlarm();
     }
 
@@ -519,4 +508,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 초기 다음 알림 시간 표시
     updateNextChimeTime();
+    
+    // 다음 알람 시간 업데이트 메시지 리스너
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message.type === 'updateNextChimeTime') {
+            const nextChimeTimeSpan = document.getElementById('nextChimeTime');
+            if (nextChimeTimeSpan) {
+                const nextTime = new Date(message.nextChimeTime);
+                nextChimeTimeSpan.textContent = nextTime.toLocaleTimeString();
+            }
+        }
+    });
+
+    // 페이지 로드 시 초기 업데이트
+    // document.addEventListener('DOMContentLoaded', updateNextChimeTime);
 });
