@@ -1,42 +1,21 @@
-chrome.runtime.onInstalled.addListener((details) => {
-    if (details.reason === 'install') {
-      // 웰컴 페이지 열기
-      chrome.tabs.create({
-        url: 'welcome.html'
-      });
-    }
-});
-
-// 오디오 플레이어 관리자
+// 오디오 관리자
 const AudioManager = {
-    blobUrl: null,
-    
-    // 오디오 플레이어 초기화
+
+    // offscreen 문서 생성
     async createOffscreenDocument() {
-        try {
-            // 이미 존재하는 문서가 있는지 확인
-            const existingDocument = await chrome.offscreen.hasDocument();
-            if (existingDocument) {
-                return;
-            }
-            
-            // 새로운 offscreen 문서 생성
-            await chrome.offscreen.createDocument({
-                url: 'audio-player.html',
-                reasons: ['AUDIO_PLAYBACK'],
-                justification: 'Playing airplane chime sounds'
-            });
-            console.log('Offscreen document created successfully');
-        } catch (error) {
-            console.error('Error creating offscreen document:', error);
-        }
+        if (await chrome.offscreen.hasDocument()) return;
+        await chrome.offscreen.createDocument({
+            url: 'audio-player.html',
+            reasons: ['AUDIO_PLAYBACK'],
+            justification: 'Playing alarm sound'
+        });
     },
-    
+
     // sounds.json에서 사운드 정보 가져오기
-    async getSoundInfo(soundName) {
+    async getSoundInfoFromJson(soundName) {
         try {
             const response = await fetch(chrome.runtime.getURL('sounds/sounds.json'));
-            const data = await response.json();
+            const data = await response.json(); // sound -> {value: 'chime1', name: 'Single Chime', filename: 'one-chime.mp3'}
             return data.sounds.find(sound => sound.value === soundName);
         } catch (error) {
             console.error('Error loading sounds.json:', error);
@@ -45,46 +24,27 @@ const AudioManager = {
     },
     
     // 사운드 재생
-    async playSound() {
+    async playSound(soundName, volume) {    // soundName -> 'chime1' 또는 'custom_1733444501214'
         try {
             await this.createOffscreenDocument();
             
-            const settings = await chrome.storage.local.get(['selectedSound', 'volume']);
-            const soundName = settings.selectedSound || 'chime1';
-            const volume = settings.volume || 50;
-            
             let soundUrl;
             let filename;
-            
-            if (soundName === 'custom') {
-                const { customSound } = await chrome.storage.local.get('customSound');
+
+            // 커스텀 사운드인 경우
+            if (soundName.startsWith('custom')) {
+                const { customSounds } = await chrome.storage.local.get('customSounds');
+                const customSound = customSounds.find(sound => sound.value === soundName);
                 if (!customSound) {
                     throw new Error('custom sound not found');
                 }
                 
-                // 기존 Blob URL 해제
-                if (this.blobUrl) {
-                    URL.revokeObjectURL(this.blobUrl);
-                }
-                
-                // Base64 데이터를 Blob으로 변환
-                const base64Data = customSound.data.split(',')[1];
-                const byteCharacters = atob(base64Data);
-                const byteNumbers = new Array(byteCharacters.length);
-                
-                for (let i = 0; i < byteCharacters.length; i++) {
-                    byteNumbers[i] = byteCharacters.charCodeAt(i);
-                }
-                
-                const byteArray = new Uint8Array(byteNumbers);
-                const blob = new Blob([byteArray], { type: 'audio/mpeg' });
-                
-                // Blob URL 생성
-                this.blobUrl = URL.createObjectURL(blob);
-                soundUrl = this.blobUrl;
+                // Base64 데이터를 직접 전달
+                soundUrl = customSound.data;  // Base64 데이터를 직접 사용
                 filename = customSound.filename;
             } else {
-                const soundInfo = await this.getSoundInfo(soundName);
+                // 기본 사운드인 경우
+                const soundInfo = await this.getSoundInfoFromJson(soundName);
                 if (!soundInfo) {
                     throw new Error(`Sound info not found for: ${soundName}`);
                 }
@@ -92,91 +52,122 @@ const AudioManager = {
                 filename = soundInfo.filename;
             }
             
-            await chrome.runtime.sendMessage({ 
+            // 오디오 재생 메시지 전송
+            chrome.runtime.sendMessage({
                 type: 'playSound',
-                soundName,
-                soundUrl,
-                filename,
-                volume
+                soundUrl: soundUrl, // 커스텀 사운드-> base64 데이터, 기본 사운드 -> URL
+                filename: filename, //  "a320-chime-1.mp3"
+                volume: volume,
+                isCustomSound: soundName.startsWith('custom')
             });
             
+            console.log('Sound playback initiated:', { soundName, volume });
+            
         } catch (error) {
-            console.error('Error requesting sound playback:', error);
-            try {
-                await chrome.offscreen.closeDocument();
-                await this.createOffscreenDocument();
-            } catch (e) {
-                console.error('Error recreating offscreen document:', e);
-            }
-        }
-    },
-    
-    cleanup: function() {
-        if (this.blobUrl) {
-            URL.revokeObjectURL(this.blobUrl);
-            this.blobUrl = null;
+            console.error('Error playing sound:', error);
         }
     }
-};
 
-// 확장 프로그램이 종료될 때 리소스 정리
-chrome.runtime.onSuspend.addListener(() => {
-    AudioManager.cleanup();
-});
+};
 
 // 알람 관리자
 const AlarmManager = {
-    // 알람 생성
-    createAlarm: function(interval) {
-        // interval이 유효한 숫자인지 확인
-        if (!interval || isNaN(interval)) {
-            interval = 15; // 기본값 설정
-        }
+    // 알람 생성 함수
+    async createAlarm(settings) {
+        const { interval, customInterval, specificTime, repeatDaily } = settings;
         
-        // 현재 시간 정보 가져오기
+        // 기존 알람 제거
+        await chrome.alarms.clearAll();
+        
         const now = new Date();
         const minutes = now.getMinutes();
         const seconds = now.getSeconds();
+        let nextAlarmTime; // 다음 알람 시각 저장 변수
         
-        // 다음 간격까지의 시간 계산
-        const nextMinutes = Math.ceil(minutes / interval) * interval;
-        let delayInMinutes = nextMinutes - minutes;
-        
-        // delayInMinutes가 0이면 다음 간격으로 설정
-        if (delayInMinutes <= 0) {
-            delayInMinutes = parseInt(interval);
+        // 지정된 시각에 알람 생성
+        if (interval === 'specific' && specificTime) {
+            const [hours, minutes] = specificTime.split(':').map(Number);
+            nextAlarmTime  = new Date(now);
+            nextAlarmTime .setHours(hours, minutes, 0, 0);
+            
+            if (nextAlarmTime  <= now) {
+                nextAlarmTime .setDate(nextAlarmTime .getDate() + 1);
+            }
+            
+            await chrome.alarms.create('chimeAlarm', {
+                when: nextAlarmTime.getTime(),
+                periodInMinutes: repeatDaily ? 24 * 60 : undefined
+            });
+        } else if (interval === 'custom') {
+        // 커스텀 인터벌: 지금부터 지정된 시간 뒤에 알람 설정
+            const customIntervalMinutes = parseInt(customInterval) || 15;
+
+            // 유효성 검사
+            if (customIntervalMinutes < 1) {
+                console.warn('Invalid custom interval. Defaulting to 15 minutes.');
+                customIntervalMinutes = 15;
+            }
+
+            // 다음 간격까지의 시간 계산
+            const nextMinutes = Math.ceil(minutes / customIntervalMinutes) * customIntervalMinutes;
+            const delayInMinutes = nextMinutes - minutes;
+
+            // 초를 고려한 정확한 지연 시간 계산
+            let delayMinutesExact = delayInMinutes - (seconds / 60);
+            if (delayMinutesExact <= 0) {
+                delayMinutesExact += customIntervalMinutes;
+            }
+
+            // 다음 알람 시각 계산 (지금 시간 + 커스텀 인터벌)
+            nextAlarmTime = new Date(now.getTime() + delayMinutesExact * 60000);
+
+            // 초와 밀리초 제거
+            nextAlarmTime.setSeconds(0, 0);
+
+            await chrome.alarms.create('chimeAlarm', {
+                delayInMinutes: delayMinutesExact,
+                periodInMinutes: customIntervalMinutes // 반복 주기는 커스텀 인터벌
+            });
+            
+        } else {
+        // 일반 인터벌: 현재 시간 기준으로 가장 가까운 다음 시간에 설정
+            let intervalMinutes = parseInt(interval) || 15;
+    
+            // 유효성 검사
+            if (intervalMinutes < 1) {
+                console.warn('Invalid interval. Defaulting to 15 minutes.');
+                intervalMinutes = 15;
+            }
+    
+            // 다음 간격까지의 시간 계산
+            const nextMinutes = Math.ceil(minutes / intervalMinutes) * intervalMinutes;
+            let delayInMinutes = nextMinutes - minutes;
+    
+            // 초를 고려한 정확한 지연 시간 계산
+            let delayMinutesExact = delayInMinutes - (seconds / 60);
+            /*  
+            지금 시간 기준으로 실제 다음 알람 시간이 즉시 혹은 
+            이미 지난 시간으로 계산되어 '바로' 알람이 울려버리는 경우 없애기 위함*/
+            if (delayMinutesExact <= 0) {
+                // 음수나 0인 경우 다음 인터벌을 잡아 미래 시간으로 설정
+                delayMinutesExact += intervalMinutes;
+            }
+    
+            // 다음 알람 시각 계산
+            nextAlarmTime = new Date(now.getTime() + delayMinutesExact * 60000);
+    
+            await chrome.alarms.create('chimeAlarm', {
+                delayInMinutes: delayMinutesExact,
+                periodInMinutes: intervalMinutes
+            });
         }
         
-        // 초를 고려한 정확한 지연 시간 계산
-        const delayMinutesExact = delayInMinutes - (seconds / 60);
-        
-        // 다음 알람 시간 계산
-        const nextAlarmTime = new Date(now.getTime() + delayInMinutes * 60000);
-        nextAlarmTime.setSeconds(0); // 정확히 0초로 설정
-        
-        console.log('Creating alarm with:', {
-            interval: interval,
-            currentTime: now.toLocaleTimeString(),
-            delayInMinutes: delayMinutesExact,
-            nextAlarmTime: nextAlarmTime.toLocaleTimeString(),
-            currentSeconds: seconds
-        });
-        
-        // 알람 생성
-        chrome.alarms.create('chimeAlarm', {
-            delayInMinutes: delayMinutesExact,
-            periodInMinutes: parseInt(interval)
-        });
-        
-        // 다음 알람 시간 저장
-        chrome.storage.local.set({
-            nextAlarmTime: nextAlarmTime.toLocaleTimeString()
-        });
+        console.log('Alarm created with settings:', settings, 'Next alarm at:', nextAlarmTime.toLocaleString());
     },
     
     // 알람 제거
-    clearAlarm: function() {
-        chrome.alarms.clear('chimeAlarm');
+    async clearAlarm() {
+        await chrome.alarms.clearAll();
     }
 };
 
@@ -193,70 +184,88 @@ const BadgeManager = {
 
 // 메시지 리스너 설정
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log('Received message:', message);
+    
+    if (message.action === 'updateAlarm') {
+        AlarmManager.createAlarm(message);
+    }
     switch (message.type) {
         case 'toggleTimer':
             if (message.isActive) {
-                chrome.storage.local.get(['interval'], function(result) {
-                    const interval = result.interval || 15; // 기본값 설정
-                    AlarmManager.createAlarm(interval);
+                chrome.storage.local.get(['interval', 'customInterval'], function(result) {
+                    AlarmManager.createAlarm({
+                        interval: result.interval || '15',
+                        customInterval: result.customInterval
+                    });
                 });
             } else {
                 AlarmManager.clearAlarm();
             }
             BadgeManager.setBadgeText(message.isActive);
             break;
-            
-        case 'updateInterval':
-            chrome.storage.local.get(['isActive'], function(result) {
-                if (result.isActive) {
-                    AlarmManager.clearAlarm();
-                    AlarmManager.createAlarm(message.interval);
-                }
-            });
-            break;
     }
 });
 
 // 알람 리스너 설정
 chrome.alarms.onAlarm.addListener(async (alarm) => {
+    console.log('Alarm triggered:', alarm);
+    
     if (alarm.name === 'chimeAlarm') {
-        const now = new Date();
-        console.log('Alarm triggered at:', now.toLocaleTimeString());
-        
-        // 현재 설정 가져오기
-        const settings = await chrome.storage.local.get(['interval']);
-        const interval = settings.interval || 15;
-        
-        // 다음 알람 시간 계산 및 저장
-        const nextAlarm = new Date(now.getTime() + interval * 60000);
-        nextAlarm.setSeconds(0); // 정확히 0초로 설정
-        
-        chrome.storage.local.set({
-            nextAlarmTime: nextAlarm.toLocaleTimeString()
-        });
-        
-        await AudioManager.playSound();
+        try {
+            // 현재 설정된 사운드와 볼륨 가져오기
+            const { isActive, selectedSound, volume } = await chrome.storage.local.get(['isActive', 'selectedSound', 'volume']);
+
+            if (!isActive) {
+                console.log('Alarm triggered, but timer is not active.');
+                return;
+            }
+
+            // 사운드 재생
+            await AudioManager.playSound(selectedSound || 'chime1', volume || 50);
+            
+            // 다음 알람 시간 계산 및 팝업에 바꾸라고 알림
+            const nextAlarm = await chrome.alarms.get('chimeAlarm');
+            if (nextAlarm) {
+                chrome.runtime.sendMessage({
+                    type: 'updateNextChimeTime',
+                    nextChimeTime: new Date(nextAlarm.scheduledTime)
+                });
+            }
+        } catch (error) {
+            console.error('Error handling alarm:', error);
+        }
     }
 });
 
 // 익스텐션 설치/업데이트 시 초기화
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
     await AudioManager.createOffscreenDocument();
-    const settings = await chrome.storage.local.get(['isActive', 'interval']);
+    const settings = await chrome.storage.local.get(['isActive', 'interval', 'customInterval']);
     if (settings.isActive) {
-        const interval = settings.interval || 15; // 기본값 설정
-        AlarmManager.createAlarm(interval);
+        await AlarmManager.createAlarm({
+            interval: settings.interval || '15',
+            customInterval: settings.customInterval
+        });
     }
     BadgeManager.setBadgeText(settings.isActive || false);
+
+    // 새로 설치된 경우에만 웰컴 페이지 열기
+    if (details.reason === 'install') {
+        chrome.tabs.create({
+            url: 'welcome.html'
+        });
+    }
 });
 
 // 브라우저 시작 시 배지 상태 복원
 chrome.runtime.onStartup.addListener(async () => {
     await AudioManager.createOffscreenDocument();
-    const settings = await chrome.storage.local.get(['isActive', 'interval']);
+    const settings = await chrome.storage.local.get(['isActive', 'interval', 'customInterval']);
     BadgeManager.setBadgeText(settings.isActive || false);
     if (settings.isActive) {
-        const interval = settings.interval || 15; // 기본값 설정
-        AlarmManager.createAlarm(interval);
+        await AlarmManager.createAlarm({
+            interval: settings.interval || '15',
+            customInterval: settings.customInterval
+        });
     }
-}); 
+});

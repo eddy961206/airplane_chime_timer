@@ -15,7 +15,10 @@ const Settings = {
             isActive: false,
             selectedSound: 'chime1',
             interval: 15,
-            volume: 50
+            volume: 50,
+            customInterval: 15,
+            specificTime: '',
+            repeatDaily: false
         });
     }
 };
@@ -165,14 +168,8 @@ const AudioController = {
     blobUrl: null,
     
     // sounds.json에서 사운드 정보 가져오기
-    async getSoundInfo(soundName) {
+    async getSoundInfoFromJson(soundName) {
         try {
-            // 커스텀 사운드인 경우
-            if (soundName.startsWith('custom_')) {
-                const { customSounds = [] } = await chrome.storage.local.get('customSounds');
-                return customSounds.find(sound => sound.value === soundName);
-            }
-            
             // 기본 사운드인 경우
             const response = await fetch(chrome.runtime.getURL('sounds/sounds.json'));
             const data = await response.json();
@@ -188,17 +185,18 @@ const AudioController = {
         try {
             let soundUrl;
             
+            // 기존 Blob URL 해제
+            if (this.blobUrl) {
+                URL.revokeObjectURL(this.blobUrl);
+                this.blobUrl = null;
+            }
+            
+            // 커스텀 사운드인 경우 storage에서 base64 데이터 가져오기
             if (soundName.startsWith('custom_')) {
-                // 커스텀 사운드인 경우 storage에서 직접 데이터 가져오기
                 const { customSounds = [] } = await chrome.storage.local.get('customSounds');
                 const customSound = customSounds.find(sound => sound.value === soundName);
                 if (!customSound) {
                     throw new Error('커스텀 사운드를 찾을 수 없습니다.');
-                }
-                
-                // 기존 Blob URL 해제
-                if (this.blobUrl) {
-                    URL.revokeObjectURL(this.blobUrl);
                 }
                 
                 // Base64 데이터를 Blob으로 변환
@@ -216,9 +214,10 @@ const AudioController = {
                 // Blob URL 생성
                 this.blobUrl = URL.createObjectURL(blob);
                 soundUrl = this.blobUrl;
+
             } else {
-                // 기본 사운드인 경우 기존 로직 사용
-                const soundInfo = await this.getSoundInfo(soundName);
+                // 기본 사운드인 경우 sounds.json에서 정보 가져오기
+                const soundInfo = await this.getSoundInfoFromJson(soundName);
                 if (!soundInfo) {
                     throw new Error(`Sound info not found for: ${soundName}`);
                 }
@@ -233,6 +232,12 @@ const AudioController = {
         } catch (error) {
             console.error('Error playing test sound:', error);
             alert('사운드 재생 중 오류가 발생했습니다.');
+        } finally {
+            // 기존 Blob URL 해제
+            if (this.blobUrl) {
+                URL.revokeObjectURL(this.blobUrl);
+                this.blobUrl = null;
+            }
         }
     },
     
@@ -244,13 +249,6 @@ const AudioController = {
         }
     }
 };
-
-// 메시지 리스너 추가
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'playChime') {
-        AudioController.playChime();
-    }
-});
 
 // UI 컨트롤러
 const UIController = {
@@ -313,7 +311,7 @@ const UIController = {
         
         // 간격 선택
         this.elements.intervalSelect.on('change', async function() {
-            const interval = parseInt($(this).val());
+            const interval = $(this).val();
             await Settings.save({ interval });
             UIController.updateNextChimeTime(interval);
             chrome.runtime.sendMessage({ type: 'updateInterval', interval });
@@ -351,21 +349,33 @@ const UIController = {
     
     // 다음 알림 시간 업데이트
     updateNextChimeTime: function(interval) {
+        const $nextChimeElement = $('#nextChimeTime');
+        if (!$nextChimeElement.length) return;
+
+        let nextTime;
         const now = new Date();
-        const minutes = now.getMinutes();
-        const nextMinutes = Math.ceil(minutes / interval) * interval;
-        const nextTime = new Date(now);
-        
-        if (nextMinutes === 60) {
-            nextTime.setHours(nextTime.getHours() + 1);
-            nextTime.setMinutes(0);
+
+        if (interval === 'specific') {
+            const [hours, minutes] = $('#specificTimeInput').val().split(':').map(Number);
+            nextTime = new Date(now);
+            nextTime.setHours(hours, minutes, 0, 0);
+            
+            if (nextTime <= now) {
+                nextTime.setDate(nextTime.getDate() + 1);
+            }
+        } else if (interval === 'custom') {
+            const customInterval = parseInt($('#customIntervalInput').val()) || 15;
+            const minutesToAdd = customInterval - (now.getMinutes() % customInterval);
+            nextTime = new Date(now.getTime() + minutesToAdd * 60000);
+            nextTime.setSeconds(0, 0);
         } else {
-            nextTime.setMinutes(nextMinutes);
+            const minutesToAdd = interval - (now.getMinutes() % interval);
+            nextTime = new Date(now.getTime() + minutesToAdd * 60000);
+            nextTime.setSeconds(0, 0);
         }
-        nextTime.setSeconds(0);
-        
+
         const timeString = nextTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        this.elements.nextChimeTime.text(timeString);
+        $nextChimeElement.text(timeString);
     }
 };
 
@@ -377,4 +387,204 @@ $(document).ready(() => {
 // 팝업 창이 닫힐 때 리소스 정리
 window.addEventListener('unload', () => {
     AudioController.cleanup();
-}); 
+});
+
+$(document).ready(async () => {
+    const $intervalSelect = $('#intervalSelect');
+    const $customIntervalContainer = $('#customIntervalContainer');
+    const $specificTimeContainer = $('#specificTimeContainer');
+    const $customIntervalInput = $('#customIntervalInput');
+    const $specificTimeInput = $('#specificTimeInput');
+    const $repeatDailyCheckbox = $('#repeatDaily');
+    const $nextChimeTime = $('#nextChimeTime');
+
+    // 설정 로드
+    const settings = await chrome.storage.local.get(['interval', 'customInterval', 'specificTime', 'repeatDaily']);
+    /* settings 의 값들 예시 : 
+        customInterval - 2, 42, .. 사용자가 입력한 커스텀 인터벌 시간
+        interval - 15, 30, 60, 'custom', 'specific' (선택상자의 옵션 value)
+        isActive - false, true
+        repeatDaily - false, true
+        selectedSound - 'chime1', 'chime2', 'custom_1343'
+        specificTime - "13:32"
+    */
+
+    // 선택상자 값 적용
+    if (settings.interval) {
+        $intervalSelect.val(settings.interval);
+        $customIntervalContainer.toggle(settings.interval === 'custom');
+        $specificTimeContainer.toggle(settings.interval === 'specific');
+    }
+
+    // 커스텀 인터벌이면 값 복구
+    if (settings.interval === 'custom' && settings.customInterval) {
+        $customIntervalInput.val(settings.customInterval);
+    }
+
+    // 특정 시각이면 값 복구
+    if (settings.interval === 'specific' && settings.specificTime) {
+        $specificTimeInput.val(settings.specificTime);
+        $repeatDailyCheckbox.prop('checked', settings.repeatDaily !== false);
+    }
+
+    // 다음 알림 시간 표시 업데이트
+    updateNextChimeTime();
+
+    /*********************** 이벤트 리스터 설정 ************************/
+    // 시간 간격 선택창 변경 이벤트
+    $intervalSelect.on('change', async () => {
+        const selectedValue = $intervalSelect.val();
+        $customIntervalContainer.toggle(selectedValue === 'custom');
+        $specificTimeContainer.toggle(selectedValue === 'specific');
+
+        if (selectedValue === 'custom') {
+            $customIntervalInput.val(settings.customInterval || 15);
+        } else if (selectedValue === 'specific') {
+            $specificTimeInput.val(settings.specificTime || '');
+            $repeatDailyCheckbox.prop('checked', settings.repeatDaily !== false);
+        }
+
+        await saveSettings();
+        updateNextChimeTime();
+    });
+
+    // 커스텀 인터벌 입력 이벤트
+    $customIntervalInput.on('input', debounce(async () => {
+        await saveSettings();
+        updateNextChimeTime();
+    }, 300));
+
+    // 포커스 아웃 이벤트
+    $customIntervalInput.on('blur', async () => {
+        await saveSettings();
+        updateNextChimeTime();
+    });
+
+    // 특정 시각 알람 입력 이벤트
+    $specificTimeInput.on('change', async () => {
+        await saveSettings();
+        updateNextChimeTime();
+    });
+
+    // 특정 시각 입력 시 매일 반복 체크박스 이벤트
+    $repeatDailyCheckbox.on('change', async () => {
+        await saveSettings();
+        updateNextChimeTime();
+    });
+
+    // 팝업 닫힐 때 이벤트
+    $(window).on('beforeunload', async () => {
+        await saveSettings();
+        updateNextChimeTime();
+    });
+    /*********************** 이벤트 리스터 설정 ************************/
+
+    // debounce 함수 정의
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
+    async function saveSettings() {
+        // 기존 저장된 설정 불러오기
+        const previousSettings = await chrome.storage.local.get(['interval', 'customInterval', 'specificTime', 'repeatDaily']);
+        // 현재 값으로 기존 설정 업데이트
+        const settings = {
+            ...previousSettings, // 기존 값 유지
+            interval: $intervalSelect.val(), // 현재 선택된 선택상자 옵션값
+        };
+
+        // 커스텀 인터벌 선택돼있으면 값 업데이트
+        if ($intervalSelect.val() === 'custom') {
+            const customInterval = parseInt($customIntervalInput.val()) || 15;
+            if (settings.customInterval !== customInterval) {
+                settings.customInterval = customInterval; // 변경된 경우만 업데이트
+            }
+        }
+
+        // 특정 시각 선택돼있으면 값 업데이트
+        if ($intervalSelect.val() === 'specific') {
+            const specificTime = $specificTimeInput.val();
+            const repeatDaily = $repeatDailyCheckbox.prop('checked');
+
+            if (settings.specificTime !== specificTime) {
+                settings.specificTime = specificTime; // 변경된 경우만 업데이트
+            }
+
+            if (settings.repeatDaily !== repeatDaily) {
+                settings.repeatDaily = repeatDaily; // 변경된 경우만 업데이트
+            }
+        }
+
+
+        // 설정 저장
+        await chrome.storage.local.set(settings);
+        await updateAlarm();    // 알람 업데이트 호출
+    }
+
+    // 'Next chime at: ' 에 보여질 다음 알림 시간 업데이트
+    function updateNextChimeTime() {
+        if (!$nextChimeTime.length) return;
+
+        let nextTime;
+        const now = new Date();
+
+        // 특정 시간 select box 에서 선택돼있으면
+        if ($intervalSelect.val() === 'specific') {
+            const [hours, minutes] = $specificTimeInput.val().split(':').map(Number);
+            nextTime = new Date(now);
+            nextTime.setHours(hours, minutes, 0, 0);
+            
+            if (nextTime <= now) {
+                nextTime.setDate(nextTime.getDate() + 1);
+            }
+        // 커스텀 인터벌 select box에서 선택돼있으면
+        } else if ($intervalSelect.val() === 'custom') {
+            const customInterval = parseInt($customIntervalInput.val()) || 15;
+            nextTime = new Date(now.getTime() + customInterval * 60000); // 현재 시간에 분을 더함
+        nextTime.setSeconds(0, 0);
+        // 일반 인터벌 select box에서 선택돼있으면
+        } else {
+            const interval = parseInt($intervalSelect.val()) || 15;
+            const minutesToAdd = interval - (now.getMinutes() % interval);
+            nextTime = new Date(now.getTime() + minutesToAdd * 60000);
+            nextTime.setSeconds(0, 0);
+        }
+
+        const timeString = nextTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        $nextChimeTime.text(timeString);
+    }
+
+    async function updateAlarm() {
+        await chrome.runtime.sendMessage({ 
+            action: 'updateAlarm',
+            interval: $intervalSelect.val(),
+            customInterval: parseInt($customIntervalInput.val()),
+            specificTime: $specificTimeInput.val(),
+            repeatDaily: $repeatDailyCheckbox.prop('checked')
+        });
+    }
+
+    // 초기 다음 알림 시간 표시
+    updateNextChimeTime();
+    
+    // 다음 알람 시간 업데이트 메시지 리스너
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message.type === 'updateNextChimeTime') {
+            const $nextChimeTimeSpan = $('#nextChimeTime');
+            if ($nextChimeTimeSpan.length) {
+                const nextTime = new Date(message.nextChimeTime);
+                const timeString = nextTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                $nextChimeTimeSpan.text(timeString);
+            }
+        }
+    });
+
+});
