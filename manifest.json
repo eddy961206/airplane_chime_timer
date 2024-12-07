@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Airplane Chime Timer",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Experience authentic aircraft seatbelt sign notifications at specific intervals",
   "permissions": [
     "storage",
