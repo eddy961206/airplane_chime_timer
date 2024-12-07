@@ -185,17 +185,18 @@ const AudioController = {
         try {
             let soundUrl;
             
+            // 기존 Blob URL 해제
+            if (this.blobUrl) {
+                URL.revokeObjectURL(this.blobUrl);
+                this.blobUrl = null;
+            }
+            
             // 커스텀 사운드인 경우 storage에서 base64 데이터 가져오기
             if (soundName.startsWith('custom_')) {
                 const { customSounds = [] } = await chrome.storage.local.get('customSounds');
                 const customSound = customSounds.find(sound => sound.value === soundName);
                 if (!customSound) {
                     throw new Error('커스텀 사운드를 찾을 수 없습니다.');
-                }
-                
-                // 기존 Blob URL 해제
-                if (this.blobUrl) {
-                    URL.revokeObjectURL(this.blobUrl);
                 }
                 
                 // Base64 데이터를 Blob으로 변환
@@ -215,8 +216,7 @@ const AudioController = {
                 soundUrl = this.blobUrl;
 
             } else {
-
-            // 기본 사운드인 경우 sounds.json에서 정보 가져오기
+                // 기본 사운드인 경우 sounds.json에서 정보 가져오기
                 const soundInfo = await this.getSoundInfoFromJson(soundName);
                 if (!soundInfo) {
                     throw new Error(`Sound info not found for: ${soundName}`);
@@ -232,6 +232,12 @@ const AudioController = {
         } catch (error) {
             console.error('Error playing test sound:', error);
             alert('사운드 재생 중 오류가 발생했습니다.');
+        } finally {
+            // 기존 Blob URL 해제
+            if (this.blobUrl) {
+                URL.revokeObjectURL(this.blobUrl);
+                this.blobUrl = null;
+            }
         }
     },
     
@@ -489,7 +495,6 @@ $(document).ready(async () => {
     async function saveSettings() {
         // 기존 저장된 설정 불러오기
         const previousSettings = await chrome.storage.local.get(['interval', 'customInterval', 'specificTime', 'repeatDaily']);
-
         // 현재 값으로 기존 설정 업데이트
         const settings = {
             ...previousSettings, // 기존 값 유지
@@ -540,12 +545,12 @@ $(document).ready(async () => {
             if (nextTime <= now) {
                 nextTime.setDate(nextTime.getDate() + 1);
             }
-        // 커스텀 인터벌 select box에서 선택돼있면
+        // 커스텀 인터벌 select box에서 선택돼있으면
         } else if ($intervalSelect.val() === 'custom') {
             const customInterval = parseInt($customIntervalInput.val()) || 15;
             nextTime = new Date(now.getTime() + customInterval * 60000); // 현재 시간에 분을 더함
         nextTime.setSeconds(0, 0);
-        // 일반 인터벌 select box에서 선택돼있면
+        // 일반 인터벌 select box에서 선택돼있으면
         } else {
             const interval = parseInt($intervalSelect.val()) || 15;
             const minutesToAdd = interval - (now.getMinutes() % interval);

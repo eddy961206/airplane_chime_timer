@@ -8,12 +8,14 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
             const volume = message.volume / 100;
             let soundUrl;
 
-            if (message.isCustomSound) {
-                // 이전 Blob URL 해제
-                if (currentBlobUrl) {
-                    URL.revokeObjectURL(currentBlobUrl);
-                }
+            // 이전 Blob URL 해제
+            if (currentBlobUrl) {
+                URL.revokeObjectURL(currentBlobUrl);
+                currentBlobUrl = null;
+            }
 
+            // 커스텀 사운드
+            if (message.isCustomSound) {
                 // Base64 데이터를 Blob으로 변환
                 const base64Data = message.soundUrl.split(',')[1];
                 const byteCharacters = atob(base64Data);
@@ -29,7 +31,9 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
                 // Blob URL 생성
                 currentBlobUrl = URL.createObjectURL(blob);
                 soundUrl = currentBlobUrl;
+            
             } else {
+            // 기본 사운드
                 soundUrl = chrome.runtime.getURL(`sounds/${message.filename}`);
             }
             
