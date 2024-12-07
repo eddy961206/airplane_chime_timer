@@ -108,14 +108,24 @@ const AlarmManager = {
                 customIntervalMinutes = 15;
             }
 
+            // 다음 간격까지의 시간 계산
+            const nextMinutes = Math.ceil(minutes / customIntervalMinutes) * customIntervalMinutes;
+            const delayInMinutes = nextMinutes - minutes;
+
+            // 초를 고려한 정확한 지연 시간 계산
+            let delayMinutesExact = delayInMinutes - (seconds / 60);
+            if (delayMinutesExact <= 0) {
+                delayMinutesExact += customIntervalMinutes;
+            }
+
             // 다음 알람 시각 계산 (지금 시간 + 커스텀 인터벌)
-            nextAlarmTime = new Date(now.getTime() + customIntervalMinutes * 60000);
+            nextAlarmTime = new Date(now.getTime() + delayMinutesExact * 60000);
 
             // 초와 밀리초 제거
             nextAlarmTime.setSeconds(0, 0);
 
             await chrome.alarms.create('chimeAlarm', {
-                delayInMinutes: customIntervalMinutes,
+                delayInMinutes: delayMinutesExact,
                 periodInMinutes: customIntervalMinutes // 반복 주기는 커스텀 인터벌
             });
             
