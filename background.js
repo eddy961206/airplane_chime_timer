@@ -238,7 +238,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 });
 
 // 익스텐션 설치/업데이트 시 초기화
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
     await AudioManager.createOffscreenDocument();
     const settings = await chrome.storage.local.get(['isActive', 'interval', 'customInterval']);
     if (settings.isActive) {
@@ -248,6 +248,13 @@ chrome.runtime.onInstalled.addListener(async () => {
         });
     }
     BadgeManager.setBadgeText(settings.isActive || false);
+
+    // 새로 설치된 경우에만 웰컴 페이지 열기
+    if (details.reason === 'install') {
+        chrome.tabs.create({
+            url: 'welcome.html'
+        });
+    }
 });
 
 // 브라우저 시작 시 배지 상태 복원
