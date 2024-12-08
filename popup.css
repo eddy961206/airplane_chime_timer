@@ -78,7 +78,7 @@ h2 {
     cursor: pointer !important;
 }
 
-/* 토글 스위치 컨테이너 */
+/* 토글 스위치 스타일 */
 .toggle-container {
     display: flex;
     align-items: center;
@@ -86,7 +86,6 @@ h2 {
     padding: 2px 0;
 }
 
-/* 토글 스위치 스타일 */
 .switch {
     position: relative;
     display: inline-block;
@@ -104,10 +103,7 @@ h2 {
 .slider {
     position: absolute;
     cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    top: 0; left: 0; right: 0; bottom: 0;
     background-color: #e0e0e0;
     transition: .4s cubic-bezier(0.4, 0, 0.2, 1);
     border: 2px solid transparent;
@@ -118,8 +114,7 @@ h2 {
     content: "";
     height: 16px;
     width: 16px;
-    left: 4px;
-    bottom: 4px;
+    left: 4px; bottom: 4px;
     background-color: white;
     transition: .4s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
@@ -166,7 +161,7 @@ input:checked ~ .toggle-label {
     color: #4CAF50;
 }
 
-/* 사운드 선택 옵션 */
+/* 사운드 옵션 스타일 */
 .sound-options {
     display: flex;
     flex-direction: column;
@@ -209,7 +204,7 @@ input:checked ~ .toggle-label {
     opacity: 1 !important;
 }
 
-/* 간격 선택 드롭다운 */
+/* 인터벌, 시각 선택 스타일 */
 select {
     width: 100%;
     padding: 6px;
@@ -231,7 +226,7 @@ select:focus {
     box-shadow: 0 0 0 2px rgba(76,175,80,0.2);
 }
 
-/* 볼륨 슬라이더 */
+/* 볼륨 슬라이더 스타일 */
 input[type="range"] {
     width: 100%;
     margin: 8px 0;
@@ -273,19 +268,14 @@ input[type="range"]::-webkit-slider-thumb:hover {
     font-size: 13px;
 }
 
-/* 다음 알림 시간 */
+/* 다음 알림 시간 표시 */
 #nextChimeTime {
     font-weight: bold;
     color: #4CAF50;
     font-size: 1em;
 }
 
-/* 마지막 섹션의 텍스트 */
-.section:last-child p {
-    margin: 0;
-    font-size: 13px;
-}
-
+/* 커스텀 사운드 업로드 섹션 */
 .custom-sound-upload {
     margin-top: 12px;
     padding-top: 12px;
@@ -327,9 +317,13 @@ input[type="range"]::-webkit-slider-thumb:hover {
     color: #666;
 }
 
-#nextChimeTime {
-    font-weight: bold;
-    color: #4CAF50;
+.next-chime-container.disabled {
+    opacity: 0.7;
+}
+
+.next-chime-container.disabled p,
+.next-chime-container.disabled #nextChimeTime {
+    color: #9e9e9e !important;
 }
 
 .custom-sound-add {
@@ -361,15 +355,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 .add-sound-btn:hover {
     background-color: #45a049;
-}
-
-.next-chime-container.disabled {
-    opacity: 0.7;
-}
-
-.next-chime-container.disabled p,
-.next-chime-container.disabled #nextChimeTime {
-    color: #9e9e9e !important;
 }
 
 #customIntervalContainer,

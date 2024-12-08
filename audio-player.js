@@ -1,22 +1,24 @@
+// [설명] 오프스크린 문서 내 스크립트 파일.
+//        background.js에서 메시지를 받아 오디오 재생을 수행.
+
 const player = document.getElementById('chimePlayer');
 let currentBlobUrl = null;
 
-// 메시지 리스너 설정
-chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+// 메시지 리스너
+chrome.runtime.onMessage.addListener(async (message) => {
     if (message.type === 'playSound') {
         try {
             const volume = message.volume / 100;
             let soundUrl;
 
-            // 이전 Blob URL 해제
+            // 이전 Blob URL 정리
             if (currentBlobUrl) {
                 URL.revokeObjectURL(currentBlobUrl);
                 currentBlobUrl = null;
             }
 
-            // 커스텀 사운드
+            // 커스텀 사운드 처리 (base64 -> Blob)
             if (message.isCustomSound) {
-                // Base64 데이터를 Blob으로 변환
                 const base64Data = message.soundUrl.split(',')[1];
                 const byteCharacters = atob(base64Data);
                 const byteNumbers = new Array(byteCharacters.length);
@@ -28,12 +30,10 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
                 const byteArray = new Uint8Array(byteNumbers);
                 const blob = new Blob([byteArray], { type: 'audio/mpeg' });
                 
-                // Blob URL 생성
                 currentBlobUrl = URL.createObjectURL(blob);
                 soundUrl = currentBlobUrl;
-            
             } else {
-            // 기본 사운드
+                // 기본 사운드
                 soundUrl = chrome.runtime.getURL(`sounds/${message.filename}`);
             }
             
@@ -41,8 +41,9 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
             player.volume = volume;
             await player.play();
 
+            console.log('오프스크린에서 사운드 재생 성공:', message.filename);
         } catch (error) {
-            console.error('Error playing sound:', error);
+            console.error('오프스크린 사운드 재생 실패:', error);
         }
     }
 });

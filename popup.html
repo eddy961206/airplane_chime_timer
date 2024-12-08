@@ -9,7 +9,7 @@
     <div class="container">
         <h1>✈️ Airplane Chime Timer 🔔</h1>
         
-        <!-- 알림 ON/OFF 토글 -->
+        <!-- 알림 ON/OFF 토글 섹션 -->
         <div class="section">
             <div class="toggle-container">
                 <span class="toggle-label">Timer Active</span>
@@ -23,14 +23,14 @@
             </div>
         </div>
 
-        <!-- 사운드 선택 -->
+        <!-- 사운드 선택 섹션 -->
         <div class="section">
             <h2>Chime Sound</h2>
             <div id="soundOptions" class="sound-options">
-                <!-- 사운드 옵션이 여기에 동적으로 추가됩니다 -->
+                <!-- 동적으로 사운드 옵션 생성 -->
             </div>
             
-            <!-- 커스텀 사운드 업로드 섹션 추가 -->
+            <!-- 커스텀 사운드 업로드 섹션 -->
             <div class="custom-sound-upload">
                 <h3>Custom Sound</h3>
                 <div class="custom-sound-add">
@@ -46,7 +46,7 @@
             </div>
         </div>
 
-        <!-- 시간 간격 선택 -->
+        <!-- 시간 간격 설정 섹션 -->
         <div class="section">
             <h2>Interval or Time</h2>
             <select id="intervalSelect">
@@ -57,13 +57,13 @@
                 <option value="specific">Specific time...</option>
             </select>
 
-            <!-- 커스텀 인터벌 입력 -->
+            <!-- 커스텀 인터벌 입력 컨테이너 -->
             <div id="customIntervalContainer" style="display: none; margin-top: 10px;">
                 <input type="number" id="customIntervalInput" min="1" max="1440" placeholder="Enter minutes">
                 <small>* 1-1440 minutes (24 hours max)</small>
             </div>
 
-            <!-- 특정 시각 입력 -->
+            <!-- 특정 시각 입력 컨테이너 -->
             <div id="specificTimeContainer" style="display: none; margin-top: 10px;">
                 <input type="time" id="specificTimeInput">
                 <div class="repeat-option">
@@ -76,7 +76,7 @@
             </div>
         </div>
 
-        <!-- 볼륨 조절 -->
+        <!-- 볼륨 조절 섹션 -->
         <div class="section">
             <h2>Volume</h2>
             <input type="range" id="volumeSlider" min="0" max="100" value="50">
