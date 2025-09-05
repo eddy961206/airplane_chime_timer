@@ -70,7 +70,7 @@ const AudioManager = {
 
 // 알람 관리 객체
 const AlarmManager = {
-    // 알람 생성
+    // 단일 타이머 알람 생성
     async createAlarm(settings) {
         const { interval, customInterval, specificTime, repeatDaily } = settings;
         
@@ -144,6 +144,51 @@ const AlarmManager = {
         console.log('알람 생성 완료:', settings, '다음 알람 시간:', nextAlarmTime.toLocaleString());
     },
     
+    // 듀얼 타이머 알람 생성
+    async createDualTimerAlarm(dualTimer) {
+        const { shortInterval, longInterval, shortSound, longSound } = dualTimer;
+        
+        // 기존 알람 모두 제거
+        await chrome.alarms.clearAll();
+        
+        const now = new Date();
+        const currentMinutes = now.getMinutes();
+        const currentSeconds = now.getSeconds();
+        
+        // 첫 번째 타이머 (짧은 주기) 설정
+        const shortIntervalMinutes = parseInt(shortInterval);
+        const shortNextMinutes = Math.ceil(currentMinutes / shortIntervalMinutes) * shortIntervalMinutes;
+        let shortDelayExact = shortNextMinutes - currentMinutes - (currentSeconds / 60);
+        if (shortDelayExact <= 0) {
+            shortDelayExact += shortIntervalMinutes;
+        }
+        
+        await chrome.alarms.create('shortTimer', {
+            delayInMinutes: shortDelayExact,
+            periodInMinutes: shortIntervalMinutes
+        });
+        
+        // 두 번째 타이머 (긴 주기) 설정
+        const longIntervalMinutes = parseInt(longInterval);
+        const longNextMinutes = Math.ceil(currentMinutes / longIntervalMinutes) * longIntervalMinutes;
+        let longDelayExact = longNextMinutes - currentMinutes - (currentSeconds / 60);
+        if (longDelayExact <= 0) {
+            longDelayExact += longIntervalMinutes;
+        }
+        
+        await chrome.alarms.create('longTimer', {
+            delayInMinutes: longDelayExact,
+            periodInMinutes: longIntervalMinutes
+        });
+        
+        console.log('듀얼 타이머 알람 생성 완료:', {
+            shortInterval: shortIntervalMinutes,
+            longInterval: longIntervalMinutes,
+            shortDelay: shortDelayExact,
+            longDelay: longDelayExact
+        });
+    },
+    
     // 알람 제거
     async clearAlarm() {
         await chrome.alarms.clearAll();
@@ -161,27 +206,41 @@ const BadgeManager = {
 };
 
 // 메시지 리스너
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     console.log('메시지 수신:', message);
     
     if (message.action === 'updateAlarm') {
-        // 알람 업데이트 요청 시
+        // 단일 타이머 알람 업데이트 요청
         AlarmManager.createAlarm(message);
     }
 
     switch (message.type) {
         case 'toggleTimer':
             if (message.isActive) {
-                chrome.storage.local.get(['interval', 'customInterval'], function(result) {
-                    AlarmManager.createAlarm({
-                        interval: result.interval || '15',
-                        customInterval: result.customInterval
+                // 현재 설정에 따라 단일 또는 듀얼 타이머 시작
+                const settings = await chrome.storage.local.get(['timerMode', 'interval', 'customInterval', 'dualTimer']);
+                
+                if (settings.timerMode === 'dual' && settings.dualTimer) {
+                    await AlarmManager.createDualTimerAlarm(settings.dualTimer);
+                } else {
+                    // 단일 모드 또는 기본값
+                    await AlarmManager.createAlarm({
+                        interval: settings.interval || '15',
+                        customInterval: settings.customInterval
                     });
-                });
+                }
             } else {
                 AlarmManager.clearAlarm();
             }
             BadgeManager.setBadgeText(message.isActive);
+            break;
+            
+        case 'updateDualTimer':
+            // 듀얼 타이머 설정 업데이트
+            const { isActive } = await chrome.storage.local.get('isActive');
+            if (isActive) {
+                await AlarmManager.createDualTimerAlarm(message.dualTimer);
+            }
             break;
     }
 });
@@ -190,40 +249,83 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 chrome.alarms.onAlarm.addListener(async (alarm) => {
     console.log('알람 트리거 발생:', alarm);
     
-    if (alarm.name === 'chimeAlarm') {
-        try {
-            const { isActive, selectedSound, volume } = await chrome.storage.local.get(['isActive', 'selectedSound', 'volume']);
-            if (!isActive) {
-                console.log('알람 발생했으나 타이머가 비활성화 상태입니다.');
-                return;
-            }
-
-            // 사운드 재생 요청
-            await AudioManager.playSound(selectedSound || 'chime1', volume || 50);
+    try {
+        const settings = await chrome.storage.local.get([
+            'isActive', 'timerMode', 'selectedSound', 'volume', 'dualTimer'
+        ]);
+        
+        if (!settings.isActive) {
+            console.log('알람 발생했으나 타이머가 비활성화 상태입니다.');
+            return;
+        }
+        
+        let soundToPlay, volume = settings.volume || 50;
+        
+        // 단일 타이머 처리
+        if (alarm.name === 'chimeAlarm') {
+            soundToPlay = settings.selectedSound || 'chime1';
+        }
+        // 듀얼 타이머 처리
+        else if (settings.timerMode === 'dual' && settings.dualTimer) {
+            const now = new Date();
+            const currentMinutes = now.getMinutes();
             
-            // 다음 알람 시간 갱신 정보 팝업에 전달
+            if (alarm.name === 'shortTimer') {
+                // 짧은 주기 알람 - 겹치는 시간인지 확인
+                const longInterval = parseInt(settings.dualTimer.longInterval);
+                const isOverlapTime = (currentMinutes % longInterval === 0);
+                
+                if (isOverlapTime) {
+                    console.log('겹치는 시간: 긴 주기 사운드 재생');
+                    soundToPlay = settings.dualTimer.longSound;
+                } else {
+                    console.log('비겹치는 시간: 짧은 주기 사운드 재생');
+                    soundToPlay = settings.dualTimer.shortSound;
+                }
+            } else if (alarm.name === 'longTimer') {
+                // 긴 주기 알람 - 항상 우선순위
+                console.log('긴 주기 알람: 긴 주기 사운드 재생');
+                soundToPlay = settings.dualTimer.longSound;
+            }
+        }
+        
+        if (soundToPlay) {
+            await AudioManager.playSound(soundToPlay, volume);
+        }
+        
+        // 단일 모드에서만 다음 알람 시간 전달
+        if (alarm.name === 'chimeAlarm') {
             const nextAlarm = await chrome.alarms.get('chimeAlarm');
             if (nextAlarm) {
                 chrome.runtime.sendMessage({
                     type: 'updateNextChimeTime',
                     nextChimeTime: new Date(nextAlarm.scheduledTime)
+                }).catch(() => {
+                    // 메시지 전송 실패 시 무시 (팝업이 닫혔을 수 있음)
                 });
             }
-        } catch (error) {
-            console.error('알람 처리 중 오류:', error);
         }
+    } catch (error) {
+        console.error('알람 처리 중 오류:', error);
     }
 });
 
 // 확장 프로그램 설치/업데이트 시 처리
 chrome.runtime.onInstalled.addListener(async (details) => {
     await AudioManager.createOffscreenDocument();
-    const settings = await chrome.storage.local.get(['isActive', 'interval', 'customInterval']);
+    const settings = await chrome.storage.local.get([
+        'isActive', 'timerMode', 'interval', 'customInterval', 'dualTimer'
+    ]);
+    
     if (settings.isActive) {
-        await AlarmManager.createAlarm({
-            interval: settings.interval || '15',
-            customInterval: settings.customInterval
-        });
+        if (settings.timerMode === 'dual' && settings.dualTimer) {
+            await AlarmManager.createDualTimerAlarm(settings.dualTimer);
+        } else {
+            await AlarmManager.createAlarm({
+                interval: settings.interval || '15',
+                customInterval: settings.customInterval
+            });
+        }
     }
     BadgeManager.setBadgeText(settings.isActive || false);
 
@@ -235,12 +337,19 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 // 브라우저 시작 시 배지 상태 복원
 chrome.runtime.onStartup.addListener(async () => {
     await AudioManager.createOffscreenDocument();
-    const settings = await chrome.storage.local.get(['isActive', 'interval', 'customInterval']);
+    const settings = await chrome.storage.local.get([
+        'isActive', 'timerMode', 'interval', 'customInterval', 'dualTimer'
+    ]);
     BadgeManager.setBadgeText(settings.isActive || false);
+    
     if (settings.isActive) {
-        await AlarmManager.createAlarm({
-            interval: settings.interval || '15',
-            customInterval: settings.customInterval
-        });
+        if (settings.timerMode === 'dual' && settings.dualTimer) {
+            await AlarmManager.createDualTimerAlarm(settings.dualTimer);
+        } else {
+            await AlarmManager.createAlarm({
+                interval: settings.interval || '15',
+                customInterval: settings.customInterval
+            });
+        }
     }
 });

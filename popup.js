@@ -15,17 +15,134 @@ const Settings = {
         }
     },
 
-    // 설정값 로드 함수
+    // 설정값 로드 함수 - 듀얼 타이머 지원 추가
     load: async function() {
         return chrome.storage.local.get({
+            // 기존 단일 타이머 설정
             isActive: false,
             selectedSound: 'chime1',
             interval: 15,
             volume: 50,
             customInterval: 15,
             specificTime: '',
-            repeatDaily: false
+            repeatDaily: false,
+            // 듀얼 타이머 설정 추가
+            timerMode: 'single', // 'single' 또는 'dual'
+            dualTimer: {
+                shortInterval: 15,
+                longInterval: 60,
+                shortSound: 'chime1',
+                longSound: 'chime2'
+            }
         });
+    }
+};
+
+// ----------------------------- DualTimerManager (듀얼 타이머 관리) -----------------------------
+// [역할] 듀얼 타이머 설정 검증, UI 관리, 알람 설정 등을 담당
+const DualTimerManager = {
+    // 두 주기가 겹치는 주기인지 검증
+    validateIntervals: function(shortInterval, longInterval) {
+        const short = parseInt(shortInterval);
+        const long = parseInt(longInterval);
+        
+        // 기본 유효성 검사
+        if (short >= long) {
+            return {
+                valid: false,
+                message: 'Timer 1 interval must be shorter than Timer 2 interval.'
+            };
+        }
+        
+        // 겹치는 주기 검사 - 긴 주기가 짧은 주기의 배수인지 확인
+        const isCompatible = (long % short === 0);
+        
+        if (!isCompatible) {
+            return {
+                valid: false, 
+                message: `Timer 2 (${long} min) must be a multiple of Timer 1 (${short} min) for proper dual timer operation.`
+            };
+        }
+        
+        return {
+            valid: true,
+            message: `Setup complete: Timer 1 every ${short} minutes, Timer 2 every ${long} minutes with priority overlap`
+        };
+    },
+    
+    // 사운드 옵션 UI 생성
+    populateSoundSelects: async function() {
+        const sounds = await SoundManager.getSoundFiles();
+        const $shortSelect = $('#shortTimerSound');
+        const $longSelect = $('#longTimerSound');
+        
+        // 선택 목록 초기화
+        $shortSelect.empty();
+        $longSelect.empty();
+        
+        sounds.forEach(sound => {
+            const $option = $('<option>', {
+                value: sound.value,
+                text: sound.name
+            });
+            $shortSelect.append($option.clone());
+            $longSelect.append($option.clone());
+        });
+        
+        return sounds;
+    },
+    
+    // 듀얼 타이머 설정 UI 업데이트
+    updateValidationStatus: function(validation) {
+        const $statusDiv = $('.dual-timer-status');
+        const $messageSpan = $('#dualTimerValidation');
+        
+        // 상태에 따른 스타일 업데이트
+        $statusDiv.removeClass('warning error');
+        
+        if (validation.valid) {
+            $statusDiv.addClass('success');
+        } else {
+            $statusDiv.addClass('error');
+        }
+        
+        $messageSpan.text(validation.message);
+    },
+    
+    // 듀얼 타이머 설정 저장
+    saveDualTimerSettings: async function() {
+        const shortInterval = parseInt($('#shortIntervalSelect').val());
+        const longInterval = parseInt($('#longIntervalSelect').val());
+        const shortSound = $('#shortTimerSound').val();
+        const longSound = $('#longTimerSound').val();
+        
+        const validation = this.validateIntervals(shortInterval, longInterval);
+        this.updateValidationStatus(validation);
+        
+        if (validation.valid) {
+            await Settings.save({
+                timerMode: 'dual',
+                dualTimer: {
+                    shortInterval,
+                    longInterval,
+                    shortSound,
+                    longSound
+                }
+            });
+            
+            // 백그라운드에 듀얼 타이머 설정 전송
+            chrome.runtime.sendMessage({
+                type: 'updateDualTimer',
+                dualTimer: {
+                    shortInterval,
+                    longInterval,
+                    shortSound,
+                    longSound
+                }
+            });
+        }
+        
+        return validation.valid;
     }
 };
 
@@ -195,7 +312,7 @@ const AudioController = {
                 const { customSounds = [] } = await chrome.storage.local.get('customSounds');
                 const customSound = customSounds.find(sound => sound.value === soundName);
                 if (!customSound) {
-                    throw new Error('커스텀 사운드를 찾을 수 없습니다.');
+                    throw new Error('Custom sound not found.');
                 }
 
                 // Base64 -> Blob 변환
@@ -216,7 +333,7 @@ const AudioController = {
                 // 기본 사운드
                 const soundInfo = await this.getSoundInfo(soundName);
                 if (!soundInfo) {
-                    throw new Error(`사운드 정보를 찾을 수 없습니다: ${soundName}`);
+                    throw new Error(`Sound information not found: ${soundName}`);
                 }
                 soundUrl = chrome.runtime.getURL(`sounds/${soundInfo.filename}`);
             }
@@ -226,7 +343,7 @@ const AudioController = {
             await this.audioElement.play();
         } catch (error) {
             console.error('사운드 재생 오류:', error);
-            alert('사운드 재생 중 오류가 발생했습니다.');
+            alert('An error occurred while playing the sound.');
         } finally {
             // 재생 후에는 blobUrl 해제 (커스텀 사운드 시)
             if (this.blobUrl) {
@@ -262,17 +379,48 @@ const UIController = {
     init: async function() {
         const settings = await Settings.load();
 
-        // 사운드 옵션 UI 생성
-        await SoundManager.createSoundOptionsUI(settings.selectedSound);
+        // 타이머 모드 설정 반영
+        $(`input[name="timerMode"][value="${settings.timerMode}"]`).prop('checked', true);
+        this.toggleTimerMode(settings.timerMode);
 
-        // 설정값을 UI에 반영
+        // 단일 모드: 기존 사운드 옵션 UI 생성
+        if (settings.timerMode === 'single') {
+            await SoundManager.createSoundOptionsUI(settings.selectedSound);
+        }
+        // 듀얼 모드: 듀얼 타이머 사운드 옵션 생성
+        else {
+            await DualTimerManager.populateSoundSelects();
+            // 듀얼 타이머 설정 복원
+            $('#shortIntervalSelect').val(settings.dualTimer.shortInterval);
+            $('#longIntervalSelect').val(settings.dualTimer.longInterval);
+            $('#shortTimerSound').val(settings.dualTimer.shortSound);
+            $('#longTimerSound').val(settings.dualTimer.longSound);
+            
+            // 듀얼 타이머 유효성 검사
+            const validation = DualTimerManager.validateIntervals(
+                settings.dualTimer.shortInterval,
+                settings.dualTimer.longInterval
+            );
+            DualTimerManager.updateValidationStatus(validation);
+        }
+
+        // 기본 UI 설정
         this.elements.timerToggle.prop('checked', settings.isActive);
         this.elements.intervalSelect.val(settings.interval);
         this.elements.volumeSlider.val(settings.volume);
         this.elements.volumeValue.text(settings.volume + '%');
 
         this.updateSectionsState(settings.isActive);
-        this.updateNextChimeTimeDisplay(settings.interval);
+        
+        // 모드에 따른 다음 알람 시간 표시
+        if (settings.timerMode === 'single') {
+            this.updateNextChimeTimeDisplay(settings.interval);
+        } else if (settings.timerMode === 'dual' && settings.dualTimer) {
+            this.updateDualTimerNextChimeDisplay(
+                settings.dualTimer.shortInterval,
+                settings.dualTimer.longInterval
+            );
+        }
 
         // 이벤트 리스너 설정
         this.setupEventListeners();
@@ -283,11 +431,32 @@ const UIController = {
         this.elements.sections.toggleClass('disabled', !isActive);
         $('.next-chime-container').toggleClass('disabled', !isActive);
     },
+    
+    // 타이머 모드 전환
+    toggleTimerMode: function(mode) {
+        if (mode === 'single') {
+            $('#singleSoundSection').show();
+            $('#singleTimerSection').show();
+            $('#dualTimerSection').hide();
+        } else {
+            $('#singleSoundSection').hide();
+            $('#singleTimerSection').hide();
+            $('#dualTimerSection').show();
+        }
+    },
 
-    // 다음 알림 시간 표시 업데이트
+    // 다음 알람 시간 표시 업데이트 (단일 모드)
     updateNextChimeTimeDisplay: function(interval) {
-        // interval 값에 따라 다음 알림 시간 계산
+        // interval 값에 따라 다음 알람 시간 계산
         const nextTimeString = calculateNextChimeTimeString(interval);
+        if (nextTimeString) {
+            this.elements.nextChimeTime.text(nextTimeString);
+        }
+    },
+    
+    // 듀얼 타이머용 다음 알람 시간 표시 업데이트
+    updateDualTimerNextChimeDisplay: function(shortInterval, longInterval) {
+        const nextTimeString = calculateDualTimerNextChimeTime(shortInterval, longInterval);
         if (nextTimeString) {
             this.elements.nextChimeTime.text(nextTimeString);
         }
@@ -344,6 +513,70 @@ const UIController = {
                     this.value = '';
                 }
             }
+        });
+        
+        // ---- 듀얼 타이머 관련 이벤트 리스너 ----
+        
+        // 타이머 모드 전환
+        $('input[name="timerMode"]').on('change', async function() {
+            const mode = $(this).val();
+            UIController.toggleTimerMode(mode);
+            
+            // 모드에 따른 초기화
+            if (mode === 'single') {
+                const settings = await Settings.load();
+                await SoundManager.createSoundOptionsUI(settings.selectedSound);
+                await Settings.save({ timerMode: 'single' });
+            } else {
+                // 듀얼 사운드 선택 옵션 생성
+                await DualTimerManager.populateSoundSelects();
+                
+                // 저장된 듀얼 타이머 설정 불러오기
+                const currentSettings = await Settings.load();
+                if (currentSettings.dualTimer) {
+                    // 저장된 설정이 있으면 UI에 복원
+                    $('#shortIntervalSelect').val(currentSettings.dualTimer.shortInterval);
+                    $('#longIntervalSelect').val(currentSettings.dualTimer.longInterval);
+                    $('#shortTimerSound').val(currentSettings.dualTimer.shortSound);
+                    $('#longTimerSound').val(currentSettings.dualTimer.longSound);
+                }
+                
+                await Settings.save({ timerMode: 'dual' });
+                
+                // 현재 UI 값으로 듀얼 타이머 설정 저장/검증
+                await DualTimerManager.saveDualTimerSettings();
+                
+                // 다음 알람 시간 업데이트
+                const shortInterval = $('#shortIntervalSelect').val();
+                const longInterval = $('#longIntervalSelect').val();
+                UIController.updateDualTimerNextChimeDisplay(shortInterval, longInterval);
+            }
+        });
+        
+        // 듀얼 타이머 짧은 주기 변경
+        $('#shortIntervalSelect').on('change', async function() {
+            await DualTimerManager.saveDualTimerSettings();
+            // 다음 알람 시간 업데이트
+            const shortInterval = $('#shortIntervalSelect').val();
+            const longInterval = $('#longIntervalSelect').val();
+            UIController.updateDualTimerNextChimeDisplay(shortInterval, longInterval);
+        });
+        
+        // 듀얼 타이머 긴 주기 변경
+        $('#longIntervalSelect').on('change', async function() {
+            await DualTimerManager.saveDualTimerSettings();
+            // 다음 알람 시간 업데이트
+            const shortInterval = $('#shortIntervalSelect').val();
+            const longInterval = $('#longIntervalSelect').val();
+            UIController.updateDualTimerNextChimeDisplay(shortInterval, longInterval);
+        });
+        
+        // 듀얼 타이머 사운드 변경
+        $('#shortTimerSound, #longTimerSound').on('change', async function() {
+            await DualTimerManager.saveDualTimerSettings();
+            // 단일 사운드 테스트 재생
+            const soundValue = $(this).val();
+            AudioController.playTestSound(soundValue, UIController.elements.volumeSlider.val());
         });
     }
 };
@@ -531,4 +764,44 @@ function calculateNextChimeTimeString(interval, specificTimeValue, customInterva
 
     if (!nextTime) return '--:--';
     return nextTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+// ---------- 듀얼 타이머용 다음 알람 시간 계산 ----------
+// [역할] 두 개의 다른 주기를 가진 타이머에서 다음에 울릴 가장 빠른 알람을 계산
+function calculateDualTimerNextChimeTime(shortInterval, longInterval) {
+    const now = new Date();
+    const currentMinutes = now.getMinutes();
+    const currentSeconds = now.getSeconds();
+    
+    const short = parseInt(shortInterval);
+    const long = parseInt(longInterval);
+    
+    // 짧은 주기 다음 알람 시간 계산
+    const shortNextMinutes = Math.ceil(currentMinutes / short) * short;
+    let shortDelayExact = shortNextMinutes - currentMinutes - (currentSeconds / 60);
+    if (shortDelayExact <= 0) {
+        shortDelayExact += short;
+    }
+    const shortNextTime = new Date(now.getTime() + shortDelayExact * 60000);
+    shortNextTime.setSeconds(0, 0);
+    
+    // 긴 주기 다음 알람 시간 계산
+    const longNextMinutes = Math.ceil(currentMinutes / long) * long;
+    let longDelayExact = longNextMinutes - currentMinutes - (currentSeconds / 60);
+    if (longDelayExact <= 0) {
+        longDelayExact += long;
+    }
+    const longNextTime = new Date(now.getTime() + longDelayExact * 60000);
+    longNextTime.setSeconds(0, 0);
+    
+    // 두 시간 중 더 빠른 시간 선택
+    const nextTime = shortNextTime <= longNextTime ? shortNextTime : longNextTime;
+    
+    // 겹치는 시간인지 확인해서 정보 추가
+    const nextMinutes = nextTime.getMinutes();
+    const isOverlapTime = (nextMinutes % long === 0);
+    const soundType = isOverlapTime ? 'Timer 2' : (nextTime.getTime() === shortNextTime.getTime() ? 'Timer 1' : 'Timer 2');
+    
+    const timeString = nextTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `${timeString} (${soundType})`;
 }

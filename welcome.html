@@ -140,15 +140,27 @@
         <h1>Airplane Chime Timer</h1>
         <ul class="key-points">
             <li>Timer is OFF by default - Click the extension icon and turn ON to start receiving chimes</li>
-            <li>Plays airplane chime sounds at regular intervals (15min, 30min, or 1hour) - example: 15:00, 15:30, 16:00</li>
+            <li><strong>Single Timer Mode:</strong> Plays one chime sound at regular intervals (15min, 30min, or 1hour) - example: 15:00, 15:30, 16:00</li>
+            <li><strong>Dual Timer Mode:</strong> Plays two different chime sounds with overlapping intervals (e.g., Timer 1 every 15min, Timer 2 every 60min) - when they overlap, Timer 2 takes priority</li>
             <li>Set custom intervals (any minute value) for more flexible timing</li>
             <li>Schedule chimes at specific times of day with daily repeat option</li>
             <li>No popup notifications - audio only</li>
             <li>Chimes exactly at :00 seconds of each interval</li>
             <li>Upload and use your own custom chime sounds (MP3, WAV up to 1MB)</li>
+            <li>Smart interval validation ensures dual timers work harmoniously together</li>
         </ul>
+        
+        <div class="dual-timer-example" style="margin-top: 30px; padding: 25px; background: linear-gradient(135deg, rgba(52, 152, 219, 0.1), rgba(46, 204, 113, 0.1)); border-radius: 16px; border: 1px solid rgba(52, 152, 219, 0.2);">
+            <h3 style="color: var(--primary-color); margin-bottom: 15px; font-size: 20px;">🔥 New: Dual Timer Example</h3>
+            <p style="text-align: left; max-width: 600px; margin: 0 auto; color: var(--text-secondary); font-size: 16px; line-height: 1.6;">
+                <strong>Setup:</strong> Timer 1 every 15 minutes with "Ding" sound, Timer 2 every 60 minutes with "Dong" sound<br>
+                <strong>Result:</strong> 09:15 Ding, 09:30 Ding, 09:45 Ding, 10:00 Dong (priority), 10:15 Ding, 10:30 Ding, 10:45 Ding, 11:00 Dong (priority)...<br>
+                <em>Perfect for productivity sessions with different break reminders!</em>
+            </p>
+        </div>
+        
         <div class="coming-soon">
-            Coming Soon: More scheduling options and sound customization features
+            Coming Soon: Visual notifications, advanced scheduling patterns, and enhanced sound customization
         </div>
     </div>
 </body>

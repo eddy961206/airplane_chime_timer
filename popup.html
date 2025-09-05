@@ -23,8 +23,8 @@
             </div>
         </div>
 
-        <!-- 사운드 선택 섹션 -->
-        <div class="section">
+        <!-- 사운드 선택 섹션 (단일 타이머 모드에서만 표시) -->
+        <div class="section" id="singleSoundSection">
             <h2>Chime Sound</h2>
             <div id="soundOptions" class="sound-options">
                 <!-- 동적으로 사운드 옵션 생성 -->
@@ -46,8 +46,23 @@
             </div>
         </div>
 
-        <!-- 시간 간격 설정 섹션 -->
+        <!-- 타이머 모드 선택 섹션 -->
         <div class="section">
+            <h2>Timer Mode</h2>
+            <div class="timer-mode-selection">
+                <label class="mode-radio">
+                    <input type="radio" name="timerMode" value="single" checked>
+                    <span>Single Timer</span>
+                </label>
+                <label class="mode-radio">
+                    <input type="radio" name="timerMode" value="dual">
+                    <span>Dual Timer</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- 단일 타이머 설정 섹션 -->
+        <div class="section" id="singleTimerSection">
             <h2>Interval or Time</h2>
             <select id="intervalSelect">
                 <option value="15">Every 15 minutes</option>
@@ -73,6 +88,58 @@
                     </label>
                 </div>
                 <small>* Set a specific time for the chime to play once</small>
+            </div>
+        </div>
+
+        <!-- 듀얼 타이머 설정 섹션 -->
+        <div class="section" id="dualTimerSection" style="display: none;">
+            <h2>Dual Timer Setup</h2>
+            
+            <!-- 첫 번째 타이머 (짧은 주기) -->
+            <div class="dual-timer-group">
+                <h3>Timer 1 (Short Interval)</h3>
+                <div class="timer-config">
+                    <select id="shortIntervalSelect">
+                        <option value="5">Every 5 minutes</option>
+                        <option value="10">Every 10 minutes</option>
+                        <option value="15" selected>Every 15 minutes</option>
+                        <option value="20">Every 20 minutes</option>
+                        <option value="30">Every 30 minutes</option>
+                    </select>
+                    <div class="sound-select-wrapper">
+                        <label>Sound:</label>
+                        <select id="shortTimerSound">
+                            <!-- 동적으로 사운드 옵션 생성 -->
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 두 번째 타이머 (긴 주기) -->
+            <div class="dual-timer-group">
+                <h3>Timer 2 (Long Interval)</h3>
+                <div class="timer-config">
+                    <select id="longIntervalSelect">
+                        <option value="30">Every 30 minutes</option>
+                        <option value="45">Every 45 minutes</option>
+                        <option value="60" selected>Every hour</option>
+                        <option value="90">Every 90 minutes</option>
+                        <option value="120">Every 2 hours</option>
+                    </select>
+                    <div class="sound-select-wrapper">
+                        <label>Sound:</label>
+                        <select id="longTimerSound">
+                            <!-- 동적으로 사운드 옵션 생성 -->
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 듀얼 타이머 상태 표시 -->
+            <div class="dual-timer-status">
+                <div class="timer-info">
+                    <small id="dualTimerValidation">Select compatible intervals for proper dual timer operation</small>
+                </div>
             </div>
         </div>
 
