@@ -218,7 +218,14 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         case 'toggleTimer':
             if (message.isActive) {
                 // 현재 설정에 따라 단일 또는 듀얼 타이머 시작
-                const settings = await chrome.storage.local.get(['timerMode', 'interval', 'customInterval', 'dualTimer']);
+                const settings = await chrome.storage.local.get([
+                    'timerMode',
+                    'interval',
+                    'customInterval',
+                    'specificTime',
+                    'repeatDaily',
+                    'dualTimer'
+                ]);
                 
                 if (settings.timerMode === 'dual' && settings.dualTimer) {
                     await AlarmManager.createDualTimerAlarm(settings.dualTimer);
@@ -226,7 +233,9 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
                     // 단일 모드 또는 기본값
                     await AlarmManager.createAlarm({
                         interval: settings.interval || '15',
-                        customInterval: settings.customInterval
+                        customInterval: settings.customInterval,
+                        specificTime: settings.specificTime,
+                        repeatDaily: settings.repeatDaily
                     });
                 }
             } else {
@@ -314,7 +323,13 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 chrome.runtime.onInstalled.addListener(async (details) => {
     await AudioManager.createOffscreenDocument();
     const settings = await chrome.storage.local.get([
-        'isActive', 'timerMode', 'interval', 'customInterval', 'dualTimer'
+        'isActive',
+        'timerMode',
+        'interval',
+        'customInterval',
+        'specificTime',
+        'repeatDaily',
+        'dualTimer'
     ]);
     
     if (settings.isActive) {
@@ -323,7 +338,9 @@ chrome.runtime.onInstalled.addListener(async (details) => {
         } else {
             await AlarmManager.createAlarm({
                 interval: settings.interval || '15',
-                customInterval: settings.customInterval
+                customInterval: settings.customInterval,
+                specificTime: settings.specificTime,
+                repeatDaily: settings.repeatDaily
             });
         }
     }
@@ -338,7 +355,13 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 chrome.runtime.onStartup.addListener(async () => {
     await AudioManager.createOffscreenDocument();
     const settings = await chrome.storage.local.get([
-        'isActive', 'timerMode', 'interval', 'customInterval', 'dualTimer'
+        'isActive',
+        'timerMode',
+        'interval',
+        'customInterval',
+        'specificTime',
+        'repeatDaily',
+        'dualTimer'
     ]);
     BadgeManager.setBadgeText(settings.isActive || false);
     
@@ -348,7 +371,9 @@ chrome.runtime.onStartup.addListener(async () => {
         } else {
             await AlarmManager.createAlarm({
                 interval: settings.interval || '15',
-                customInterval: settings.customInterval
+                customInterval: settings.customInterval,
+                specificTime: settings.specificTime,
+                repeatDaily: settings.repeatDaily
             });
         }
     }

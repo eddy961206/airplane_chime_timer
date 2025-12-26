@@ -19,7 +19,12 @@ chrome.runtime.onMessage.addListener(async (message) => {
 
             // 커스텀 사운드 처리 (base64 -> Blob)
             if (message.isCustomSound) {
-                const base64Data = message.soundUrl.split(',')[1];
+                const [header, base64Data] = message.soundUrl.split(',');
+                if (!base64Data) {
+                    throw new Error('Invalid audio data.');
+                }
+                const mimeMatch = header.match(/^data:(.*?);base64$/);
+                const mimeType = mimeMatch ? mimeMatch[1] : 'audio/mpeg';
                 const byteCharacters = atob(base64Data);
                 const byteNumbers = new Array(byteCharacters.length);
                 
@@ -28,7 +33,7 @@ chrome.runtime.onMessage.addListener(async (message) => {
                 }
                 
                 const byteArray = new Uint8Array(byteNumbers);
-                const blob = new Blob([byteArray], { type: 'audio/mpeg' });
+                const blob = new Blob([byteArray], { type: mimeType });
                 
                 currentBlobUrl = URL.createObjectURL(blob);
                 soundUrl = currentBlobUrl;

@@ -1,0 +1,54 @@
+{
+  "name": "airplane-chime-timer",
+  "version": "1.2.1",
+  "description": "Experience authentic aircraft seatbelt sign notifications at specific intervals with dual timer support",
+  "main": "src/background.js",
+  "scripts": {
+    "build": "webpack --mode=production && node scripts/build.js",
+    "build:dev": "webpack --mode=development && node scripts/build.js",
+    "watch": "node scripts/build.js && webpack --mode=development --watch",
+    "lint": "eslint src/ --ext .js",
+    "lint:fix": "eslint src/ --ext .js --fix",
+    "format": "prettier --write \"src/**/*.{js,json,css,html}\"",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "dev": "npm run build:dev && npm run watch",
+    "clean": "rimraf dist",
+    "prebuild": "npm run clean && npm run lint"
+  },
+  "keywords": [
+    "chrome-extension",
+    "timer",
+    "productivity",
+    "airplane-chime",
+    "notifications",
+    "dual-timer"
+  ],
+  "author": "eddy961206",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eddy961206/airplane_chime_timer.git"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.23.0",
+    "@babel/preset-env": "^7.23.0",
+    "babel-loader": "^9.1.0",
+    "css-loader": "^6.8.0",
+    "eslint": "^8.52.0",
+    "html-loader": "^4.2.0",
+    "html-webpack-plugin": "^5.5.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.0.0",
+    "rimraf": "^5.0.0",
+    "style-loader": "^3.3.0",
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.0"
+  },
+  "browserslist": [
+    "chrome >= 88"
+  ],
+  "dependencies": {
+    "jquery": "^3.7.1"
+  }
+}

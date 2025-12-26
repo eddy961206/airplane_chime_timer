@@ -1,3 +1,5 @@
+import $ from 'jquery';
+
 // [설명] 이 파일은 팝업 페이지 로딩 시 동작하는 코드로, UI 초기화, 이벤트 리스너 등록, 사용자 설정 로드/저장 등을 담당한다.
 // 주석은 모두 한국어로 달며, UI에 표시되는 텍스트는 영어로 유지한다.
 // 콘솔 로그 또한 한국어로 작성하여 개발자 이해를 돕는다.
@@ -316,7 +318,12 @@ const AudioController = {
                 }
 
                 // Base64 -> Blob 변환
-                const base64Data = customSound.data.split(',')[1];
+                const [header, base64Data] = customSound.data.split(',');
+                if (!base64Data) {
+                    throw new Error('Invalid audio data.');
+                }
+                const mimeMatch = header.match(/^data:(.*?);base64$/);
+                const mimeType = mimeMatch ? mimeMatch[1] : 'audio/mpeg';
                 const byteCharacters = atob(base64Data);
                 const byteNumbers = new Array(byteCharacters.length);
                 
@@ -325,7 +332,7 @@ const AudioController = {
                 }
                 
                 const byteArray = new Uint8Array(byteNumbers);
-                const blob = new Blob([byteArray], { type: 'audio/mpeg' });
+                const blob = new Blob([byteArray], { type: mimeType });
                 
                 this.blobUrl = URL.createObjectURL(blob);
                 soundUrl = this.blobUrl;
@@ -447,8 +454,13 @@ const UIController = {
 
     // 다음 알람 시간 표시 업데이트 (단일 모드)
     updateNextChimeTimeDisplay: function(interval) {
-        // interval 값에 따라 다음 알람 시간 계산
-        const nextTimeString = calculateNextChimeTimeString(interval);
+        const specificTimeValue = $('#specificTimeInput').val();
+        const customIntervalValue = $('#customIntervalInput').val();
+        const nextTimeString = calculateNextChimeTimeString(
+            interval,
+            specificTimeValue,
+            customIntervalValue
+        );
         if (nextTimeString) {
             this.elements.nextChimeTime.text(nextTimeString);
         }
@@ -527,6 +539,18 @@ const UIController = {
                 const settings = await Settings.load();
                 await SoundManager.createSoundOptionsUI(settings.selectedSound);
                 await Settings.save({ timerMode: 'single' });
+
+                if (settings.isActive) {
+                    chrome.runtime.sendMessage({
+                        action: 'updateAlarm',
+                        interval: settings.interval,
+                        customInterval: settings.customInterval,
+                        specificTime: settings.specificTime,
+                        repeatDaily: settings.repeatDaily
+                    });
+                }
+
+                UIController.updateNextChimeTimeDisplay($('#intervalSelect').val());
             } else {
                 // 듀얼 사운드 선택 옵션 생성
                 await DualTimerManager.populateSoundSelects();
@@ -739,26 +763,39 @@ $(document).ready(async () => {
 //        popup.js 내에서 UIController, 추가 설정 로직 모두 재사용.
 function calculateNextChimeTimeString(interval, specificTimeValue, customIntervalValue) {
     const now = new Date();
+    const minutes = now.getMinutes();
+    const seconds = now.getSeconds();
     let nextTime = null;
 
     if (!interval) return '--:--';
 
     if (interval === 'specific' && specificTimeValue) {
-        const [hours, minutes] = specificTimeValue.split(':').map(Number);
+        const [hours, mins] = specificTimeValue.split(':').map(Number);
         nextTime = new Date(now);
-        nextTime.setHours(hours, minutes, 0, 0);
+        nextTime.setHours(hours, mins, 0, 0);
         
         if (nextTime <= now) {
             nextTime.setDate(nextTime.getDate() + 1);
         }
     } else if (interval === 'custom') {
-        const customInterval = parseInt(customIntervalValue) || 15;
-        nextTime = new Date(now.getTime() + customInterval * 60000);
+        const customInterval = Math.max(1, parseInt(customIntervalValue) || 15);
+        const nextMinutes = Math.ceil(minutes / customInterval) * customInterval;
+        let delayMinutesExact = nextMinutes - minutes - (seconds / 60);
+        if (delayMinutesExact <= 0) {
+            delayMinutesExact += customInterval;
+        }
+
+        nextTime = new Date(now.getTime() + delayMinutesExact * 60000);
         nextTime.setSeconds(0, 0);
     } else {
-        const intervalMinutes = parseInt(interval) || 15;
-        const minutesToAdd = intervalMinutes - (now.getMinutes() % intervalMinutes);
-        nextTime = new Date(now.getTime() + minutesToAdd * 60000);
+        const intervalMinutes = Math.max(1, parseInt(interval) || 15);
+        const nextMinutes = Math.ceil(minutes / intervalMinutes) * intervalMinutes;
+        let delayMinutesExact = nextMinutes - minutes - (seconds / 60);
+        if (delayMinutesExact <= 0) {
+            delayMinutesExact += intervalMinutes;
+        }
+
+        nextTime = new Date(now.getTime() + delayMinutesExact * 60000);
         nextTime.setSeconds(0, 0);
     }
 
