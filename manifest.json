@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Airplane Chime Timer",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "Experience authentic aircraft seatbelt sign notifications at specific intervals",
   "permissions": [
     "storage",
@@ -27,17 +27,21 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "web_accessible_resources": [{
-    "resources": [
-        "sounds/*", 
-        "sounds/sounds.json", 
-        "audio-player.html", 
-        "audio-player.js", 
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "sounds/*",
+        "sounds/sounds.json",
+        "audio-player.html",
+        "audio-player.js",
         "icons/icon128.png"
-    ],
-    "matches": ["<all_urls>"]
-  }],
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; media-src 'self' data:"
   }
-} 
+}
