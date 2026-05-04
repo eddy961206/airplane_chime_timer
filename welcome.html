@@ -4,84 +4,167 @@
     <meta charset="UTF-8">
     <title>Welcome to Airplane Chime Timer</title>
     <style>
+        :root {
+            --primary-color: #3498db;
+            --text-primary: #2c3e50;
+            --text-secondary: #596575;
+            --background: #f8fafc;
+            --card-background: #ffffff;
+            --accent-color: #2ecc71;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
             width: 100%;
-            max-width: 800px;
-            margin: 30px auto;
+            max-width: 900px;
+            margin: 40px auto;
             padding: 20px;
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
             line-height: 1.6;
-            color: #333;
-            background-color: #f5f5f5;
+            color: var(--text-primary);
+            background-color: var(--background);
         }
         
         .container {
-            background: #fff;
-            padding: 30px;
-            border-radius: 16px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            background: var(--card-background);
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
             text-align: center;
+            transition: transform 0.3s ease;
+        }
+
+        .container:hover {
+            transform: translateY(-5px);
         }
         
         .logo {
-            width: 96px;
-            height: 96px;
-            margin-bottom: 15px;
-            transition: transform 0.3s ease;
-            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.1));
+            width: 120px;
+            height: 120px;
+            margin-bottom: 25px;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            filter: drop-shadow(0 6px 12px rgba(0,0,0,0.1));
         }
         
         .logo:hover {
-            transform: scale(1.05);
-            filter: drop-shadow(0 6px 12px rgba(0,0,0,0.15));
+            transform: scale(1.1) rotate(5deg);
+            filter: drop-shadow(0 8px 16px rgba(0,0,0,0.15));
         }
         
         h1 {
-            color: #2c3e50;
-            font-size: 36px;
-            margin: 0 0 30px 0;
+            color: var(--text-primary);
+            font-size: 40px;
+            margin: 0 0 18px 0;
             text-align: center;
-            font-weight: 600;
+            font-weight: 700;
             letter-spacing: -0.5px;
+            background: linear-gradient(120deg, var(--primary-color), var(--accent-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
         
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 18px;
+            margin: 0 auto 30px;
+            max-width: 680px;
+        }
+
+        .quick-start {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px;
+            margin: 0 auto 32px;
+            max-width: 720px;
+            text-align: left;
+        }
+
+        .quick-step {
+            background: #f8fafc;
+            border: 1px solid rgba(52, 152, 219, 0.18);
+            border-radius: 10px;
+            padding: 16px;
+        }
+
+        .quick-step strong {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--text-primary);
+        }
+
+        .quick-step span {
+            color: var(--text-secondary);
+            font-size: 15px;
+        }
+
         .key-points {
             list-style: none;
             padding: 0;
             margin: 0 auto;
             text-align: left;
-            max-width: 600px;
+            max-width: 700px;
+            display: grid;
+            gap: 14px;
         }
         
         .key-points li {
-            margin-bottom: 15px;
-            padding-left: 30px;
+            padding-left: 35px;
             position: relative;
-            font-size: 20px;
-            color: #2c3e50;
-            line-height: 1.3;
+            font-size: 17px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            transition: transform 0.2s ease;
         }
         
         .key-points li:before {
-            content: "•";
-            color: #4CAF50;
-            font-size: 28px;
+            content: "✓";
+            color: var(--accent-color);
+            font-size: 20px;
             position: absolute;
             left: 0;
-            top: -4px;
+            top: 2px;
+            font-weight: bold;
         }
         
-        .key-points li:last-child {
-            margin-bottom: 0;
+        .key-points li:hover {
+            transform: translateX(5px);
+            color: var(--text-primary);
         }
         
         .coming-soon {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #eee;
-            color: #666;
-            font-style: italic;
-            font-size: 18px;
+            margin-top: 40px;
+            padding: 20px;
+            border-top: 1px solid rgba(0,0,0,0.08);
+            color: var(--text-secondary);
+            font-size: 16px;
+            background: linear-gradient(to right, rgba(52, 152, 219, 0.1), rgba(46, 204, 113, 0.1));
+            border-radius: 12px;
+            display: inline-block;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 15px;
+                margin: 20px auto;
+            }
+
+            .container {
+                padding: 25px;
+            }
+
+            h1 {
+                font-size: 32px;
+                margin-bottom: 30px;
+            }
+
+            .key-points li {
+                font-size: 16px;
+            }
         }
     </style>
 </head>
@@ -89,17 +172,47 @@
     <div class="container">
         <img src="icons/icon128.png" alt="Logo" class="logo">
         <h1>Airplane Chime Timer</h1>
+        <p class="subtitle">Authentic aircraft chimes for focus sessions, breaks, medication reminders, game timing, and any routine that works better with sound instead of popups.</p>
+        <div class="quick-start">
+            <div class="quick-step">
+                <strong>1. Pin it</strong>
+                <span>Keep the extension visible so the timer is one click away.</span>
+            </div>
+            <div class="quick-step">
+                <strong>2. Pick a mode</strong>
+                <span>Use a single interval, a specific time, or dual timers with different sounds.</span>
+            </div>
+            <div class="quick-step">
+                <strong>3. Turn it on</strong>
+                <span>The badge changes to ON and the next chime time is shown in the popup.</span>
+            </div>
+        </div>
         <ul class="key-points">
-            <li>Timer is OFF by default - Click the extension icon and turn ON to start receiving chimes</li>
-            <li>Plays airplane chime sounds at regular intervals (15min, 30min, or 1hour) - example: 15:00, 15:30, 16:00</li>
+            <li>Timer is OFF by default, so nothing plays until you enable it.</li>
+            <li><strong>Single Timer Mode:</strong> Plays one chime at regular intervals such as 15min, 30min, or 1 hour.</li>
+            <li><strong>Dual Timer Mode:</strong> Plays two different chimes with overlap priority, so hourly reminders can feel different from short breaks.</li>
             <li>Set custom intervals (any minute value) for more flexible timing</li>
             <li>Schedule chimes at specific times of day with daily repeat option</li>
-            <li>No popup notifications - audio only</li>
+            <li>No popup notifications and no tracking - audio only, stored locally in Chrome</li>
             <li>Chimes exactly at :00 seconds of each interval</li>
             <li>Upload and use your own custom chime sounds (MP3, WAV up to 1MB)</li>
+            <li>Smart interval validation ensures dual timers work harmoniously together</li>
         </ul>
+        
+        <div class="dual-timer-example" style="margin-top: 30px; padding: 25px; background: linear-gradient(135deg, rgba(52, 152, 219, 0.1), rgba(46, 204, 113, 0.1)); border-radius: 12px; border: 1px solid rgba(52, 152, 219, 0.2);">
+            <h3 style="color: var(--primary-color); margin-bottom: 15px; font-size: 20px;">🔥 New: Dual Timer Example</h3>
+            <p style="text-align: left; max-width: 600px; margin: 0 auto; color: var(--text-secondary); font-size: 16px; line-height: 1.6;">
+                <strong>Setup:</strong> Timer 1 every 15 minutes with "Ding" sound, Timer 2 every 60 minutes with "Dong" sound<br>
+                <strong>Result:</strong> 09:15 Ding, 09:30 Ding, 09:45 Ding, 10:00 Dong (priority), 10:15 Ding, 10:30 Ding, 10:45 Ding, 11:00 Dong (priority)...<br>
+                <em>Useful when you want short focus cues and stronger hour marks without visual interruptions.</em>
+            </p>
+        </div>
+        
         <div class="coming-soon">
-            Coming Soon: More scheduling options and sound customization features
+            Tip: Pin the extension for quick access. If you like it, please leave a review on the Chrome Web Store — it helps a lot.
+            <div style="margin-top: 10px; font-size: 14px;">
+                Feedback: <a href="mailto:skykum2004@gmail.com">skykum2004@gmail.com</a>
+            </div>
         </div>
     </div>
 </body>
