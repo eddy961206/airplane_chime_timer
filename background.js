@@ -1,1 +1,320 @@
-(()=>{const e={async createOffscreenDocument(){await chrome.offscreen.hasDocument()||await chrome.offscreen.createDocument({url:"audio-player.html",reasons:["AUDIO_PLAYBACK"],justification:"Playing alarm sound"})},async getSoundInfoFromJson(e){try{const a=await fetch(chrome.runtime.getURL("sounds/sounds.json"));return(await a.json()).sounds.find(a=>a.value===e)}catch(e){return console.error("sounds.json 로드 실패:",e),null}},async playSound(e,a){try{let t,r;if(await this.createOffscreenDocument(),e.startsWith("custom")){const{customSounds:a}=await chrome.storage.local.get("customSounds"),i=a.find(a=>a.value===e);if(!i)throw new Error("커스텀 사운드 정보를 찾을 수 없습니다.");t=i.data,r=i.filename}else{const a=await this.getSoundInfoFromJson(e);if(!a)throw new Error(`사운드 정보 찾기 실패: ${e}`);t=chrome.runtime.getURL(`sounds/${a.filename}`),r=a.filename}chrome.runtime.sendMessage({type:"playSound",soundUrl:t,filename:r,volume:a,isCustomSound:e.startsWith("custom")}),console.log("사운드 재생 요청 완료:",{soundName:e,volume:a})}catch(e){console.error("사운드 재생 오류:",e)}}},a={async createAlarm(e){const{interval:a,customInterval:t,specificTime:r,repeatDaily:i}=e;await chrome.alarms.clearAll();const o=new Date,l=o.getMinutes(),n=o.getSeconds();let c;if("specific"===a&&r){const[e,a]=r.split(":").map(Number);c=new Date(o),c.setHours(e,a,0,0),c<=o&&c.setDate(c.getDate()+1),await chrome.alarms.create("chimeAlarm",{when:c.getTime(),periodInMinutes:i?1440:void 0})}else if("custom"===a){let e=parseInt(t)||15;e<1&&(console.warn("유효하지 않은 커스텀 인터벌. 15분으로 대체합니다."),e=15);let a=Math.ceil(l/e)*e-l-n/60;a<=0&&(a+=e),c=new Date(o.getTime()+6e4*a),c.setSeconds(0,0),await chrome.alarms.create("chimeAlarm",{delayInMinutes:a,periodInMinutes:e})}else{let e=parseInt(a)||15;e<1&&(console.warn("유효하지 않은 인터벌. 15분으로 대체합니다."),e=15);let t=Math.ceil(l/e)*e-l-n/60;t<=0&&(t+=e),c=new Date(o.getTime()+6e4*t),c.setSeconds(0,0),await chrome.alarms.create("chimeAlarm",{delayInMinutes:t,periodInMinutes:e})}console.log("알람 생성 완료:",e,"다음 알람 시간:",c.toLocaleString())},async createDualTimerAlarm(e){const{shortInterval:a,longInterval:t,shortSound:r,longSound:i}=e;await chrome.alarms.clearAll();const o=new Date,l=o.getMinutes(),n=o.getSeconds(),c=parseInt(a);let s=Math.ceil(l/c)*c-l-n/60;s<=0&&(s+=c),await chrome.alarms.create("shortTimer",{delayInMinutes:s,periodInMinutes:c});const m=parseInt(t);let u=Math.ceil(l/m)*m-l-n/60;u<=0&&(u+=m),await chrome.alarms.create("longTimer",{delayInMinutes:u,periodInMinutes:m}),console.log("듀얼 타이머 알람 생성 완료:",{shortInterval:c,longInterval:m,shortDelay:s,longDelay:u})},async clearAlarm(){await chrome.alarms.clearAll()}},t=function(e){chrome.action.setBadgeText({text:e?"ON":"OFF"}),chrome.action.setBadgeBackgroundColor({color:e?"#4CAF50":"#9e9e9e"})},r={async ensureInstalledAt(){const{installedAt:e}=await chrome.storage.local.get("installedAt");e||await chrome.storage.local.set({installedAt:Date.now()})},async incrementChimeCount(){const{chimeCount:e=0}=await chrome.storage.local.get("chimeCount");await chrome.storage.local.set({chimeCount:e+1,lastChimeAt:Date.now()})}};chrome.runtime.onMessage.addListener(async(e,r,i)=>{switch(console.log("메시지 수신:",e),"updateAlarm"===e.action&&a.createAlarm(e),e.type){case"toggleTimer":if(e.isActive){const e=await chrome.storage.local.get(["timerMode","interval","customInterval","specificTime","repeatDaily","dualTimer"]);"dual"===e.timerMode&&e.dualTimer?await a.createDualTimerAlarm(e.dualTimer):await a.createAlarm({interval:e.interval||"15",customInterval:e.customInterval,specificTime:e.specificTime,repeatDaily:e.repeatDaily})}else a.clearAlarm();t(e.isActive);break;case"updateDualTimer":const{isActive:r}=await chrome.storage.local.get("isActive");r&&await a.createDualTimerAlarm(e.dualTimer)}}),chrome.alarms.onAlarm.addListener(async a=>{console.log("알람 트리거 발생:",a);try{const t=await chrome.storage.local.get(["isActive","timerMode","selectedSound","volume","dualTimer"]);if(!t.isActive)return void console.log("알람 발생했으나 타이머가 비활성화 상태입니다.");let i,o=t.volume||50;if("chimeAlarm"===a.name)i=t.selectedSound||"chime1";else if("dual"===t.timerMode&&t.dualTimer){const e=(new Date).getMinutes();if("shortTimer"===a.name){e%parseInt(t.dualTimer.longInterval)===0?(console.log("겹치는 시간: 긴 주기 사운드 재생"),i=t.dualTimer.longSound):(console.log("비겹치는 시간: 짧은 주기 사운드 재생"),i=t.dualTimer.shortSound)}else"longTimer"===a.name&&(console.log("긴 주기 알람: 긴 주기 사운드 재생"),i=t.dualTimer.longSound)}if(i&&(r.incrementChimeCount().catch(()=>{}),await e.playSound(i,o)),"chimeAlarm"===a.name){const e=await chrome.alarms.get("chimeAlarm");e&&chrome.runtime.sendMessage({type:"updateNextChimeTime",nextChimeTime:new Date(e.scheduledTime)}).catch(()=>{})}}catch(e){console.error("알람 처리 중 오류:",e)}}),chrome.runtime.onInstalled.addListener(async i=>{await e.createOffscreenDocument(),await r.ensureInstalledAt();const o=await chrome.storage.local.get(["isActive","timerMode","interval","customInterval","specificTime","repeatDaily","dualTimer"]);o.isActive&&("dual"===o.timerMode&&o.dualTimer?await a.createDualTimerAlarm(o.dualTimer):await a.createAlarm({interval:o.interval||"15",customInterval:o.customInterval,specificTime:o.specificTime,repeatDaily:o.repeatDaily})),t(o.isActive||!1),"install"===i.reason&&chrome.tabs.create({url:"welcome.html"})}),chrome.runtime.onStartup.addListener(async()=>{await e.createOffscreenDocument();const r=await chrome.storage.local.get(["isActive","timerMode","interval","customInterval","specificTime","repeatDaily","dualTimer"]);t(r.isActive||!1),r.isActive&&("dual"===r.timerMode&&r.dualTimer?await a.createDualTimerAlarm(r.dualTimer):await a.createAlarm({interval:r.interval||"15",customInterval:r.customInterval,specificTime:r.specificTime,repeatDaily:r.repeatDaily}))})})();
+const DEFAULT_SETTINGS = {
+  isActive: false,
+  selectedSound: 'chime1',
+  interval: '15',
+  customInterval: 15,
+  specificTime: '',
+  repeatDaily: false,
+  timerMode: 'single',
+  dualTimer: {
+    shortInterval: 15,
+    longInterval: 60,
+    shortSound: 'chime1',
+    longSound: 'chime2'
+  },
+  volume: 50
+};
+
+const MIN_INTERVAL_MINUTES = 1;
+const MAX_INTERVAL_MINUTES = 1440;
+
+chrome.runtime.onInstalled.addListener((details) => {
+  void handleInstalled(details);
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  void handleStartup();
+});
+
+chrome.runtime.onMessage.addListener((message) => {
+  void handleMessage(message);
+});
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  void handleAlarm(alarm);
+});
+
+async function handleInstalled(details) {
+  await ensureOffscreenDocument();
+  await ensureInstalledAt();
+  clearUninstallRedirect();
+  await restoreActiveTimer();
+
+  if (details.reason === 'install') {
+    chrome.tabs.create({ url: 'welcome.html' });
+  }
+}
+
+async function handleStartup() {
+  await ensureOffscreenDocument();
+  clearUninstallRedirect();
+  await restoreActiveTimer();
+}
+
+async function handleMessage(message) {
+  if (message.action === 'updateAlarm') {
+    await createSingleAlarm({
+      interval: message.interval,
+      customInterval: message.customInterval,
+      specificTime: message.specificTime,
+      repeatDaily: message.repeatDaily
+    });
+    return;
+  }
+
+  if (message.type === 'toggleTimer') {
+    if (message.isActive) {
+      await restoreActiveTimer();
+    } else {
+      await clearAlarms();
+    }
+    await setBadge(Boolean(message.isActive));
+    return;
+  }
+
+  if (message.type === 'updateDualTimer') {
+    const { isActive } = await chrome.storage.local.get('isActive');
+    if (isActive) {
+      await createDualTimerAlarm(message.dualTimer);
+    }
+  }
+}
+
+async function handleAlarm(alarm) {
+  const settings = await loadSettings();
+  if (!settings.isActive) {
+    return;
+  }
+
+  const sound = pickSoundForAlarm(alarm.name, settings);
+  if (!sound) {
+    return;
+  }
+
+  await incrementChimeCount();
+  await playSound(sound, settings.volume);
+
+  if (alarm.name === 'chimeAlarm') {
+    await notifyNextChimeTime('chimeAlarm');
+  }
+}
+
+function pickSoundForAlarm(alarmName, settings) {
+  if (alarmName === 'chimeAlarm') {
+    return settings.selectedSound || DEFAULT_SETTINGS.selectedSound;
+  }
+
+  if (settings.timerMode !== 'dual' || !settings.dualTimer) {
+    return null;
+  }
+
+  if (alarmName === 'longTimer') {
+    return settings.dualTimer.longSound;
+  }
+
+  if (alarmName === 'shortTimer') {
+    const minute = new Date().getMinutes();
+    const longInterval = clampInterval(settings.dualTimer.longInterval, 60);
+    return minute % longInterval === 0
+      ? settings.dualTimer.longSound
+      : settings.dualTimer.shortSound;
+  }
+
+  return null;
+}
+
+async function restoreActiveTimer() {
+  const settings = await loadSettings();
+  await setBadge(settings.isActive);
+
+  if (!settings.isActive) {
+    return;
+  }
+
+  if (settings.timerMode === 'dual' && settings.dualTimer) {
+    await createDualTimerAlarm(settings.dualTimer);
+  } else {
+    await createSingleAlarm(settings);
+  }
+}
+
+async function createSingleAlarm(settings) {
+  await clearAlarms();
+
+  const now = new Date();
+  let nextTime;
+
+  if (settings.interval === 'specific' && settings.specificTime) {
+    nextTime = getNextSpecificTime(settings.specificTime);
+    await chrome.alarms.create('chimeAlarm', {
+      when: nextTime.getTime(),
+      periodInMinutes: settings.repeatDaily ? 1440 : undefined
+    });
+  } else {
+    const interval = settings.interval === 'custom'
+      ? clampInterval(settings.customInterval, DEFAULT_SETTINGS.customInterval)
+      : clampInterval(settings.interval, DEFAULT_SETTINGS.interval);
+    const delayInMinutes = getDelayToNextInterval(now, interval);
+    nextTime = new Date(now.getTime() + delayInMinutes * 60 * 1000);
+    nextTime.setSeconds(0, 0);
+    await chrome.alarms.create('chimeAlarm', {
+      delayInMinutes,
+      periodInMinutes: interval
+    });
+  }
+
+  await notifyNextChimeTime('chimeAlarm', nextTime);
+}
+
+async function createDualTimerAlarm(dualTimer) {
+  await clearAlarms();
+
+  const shortInterval = clampInterval(dualTimer?.shortInterval, DEFAULT_SETTINGS.dualTimer.shortInterval);
+  const longInterval = clampInterval(dualTimer?.longInterval, DEFAULT_SETTINGS.dualTimer.longInterval);
+
+  await chrome.alarms.create('shortTimer', {
+    delayInMinutes: getDelayToNextInterval(new Date(), shortInterval),
+    periodInMinutes: shortInterval
+  });
+
+  await chrome.alarms.create('longTimer', {
+    delayInMinutes: getDelayToNextInterval(new Date(), longInterval),
+    periodInMinutes: longInterval
+  });
+}
+
+async function clearAlarms() {
+  await chrome.alarms.clearAll();
+}
+
+function getDelayToNextInterval(now, interval) {
+  const minutes = now.getMinutes();
+  const seconds = now.getSeconds();
+  let delay = Math.ceil(minutes / interval) * interval - minutes - seconds / 60;
+  if (delay <= 0) {
+    delay += interval;
+  }
+  return delay;
+}
+
+function getNextSpecificTime(value) {
+  const [hours, minutes] = value.split(':').map(Number);
+  const next = new Date();
+  next.setHours(hours, minutes, 0, 0);
+  if (next <= new Date()) {
+    next.setDate(next.getDate() + 1);
+  }
+  return next;
+}
+
+function clampInterval(value, fallback) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) {
+    return Number.parseInt(fallback, 10);
+  }
+  return Math.max(MIN_INTERVAL_MINUTES, Math.min(MAX_INTERVAL_MINUTES, parsed));
+}
+
+async function playSound(soundName, volume) {
+  await ensureOffscreenDocument();
+
+  const isCustomSound = soundName.startsWith('custom_');
+  let filename = '';
+  let soundUrl = '';
+
+  if (isCustomSound) {
+    const { customSounds = [] } = await chrome.storage.local.get('customSounds');
+    const customSound = customSounds.find((sound) => sound.value === soundName);
+    if (!customSound) {
+      return;
+    }
+    filename = customSound.filename;
+    soundUrl = customSound.data;
+  } else {
+    const soundInfo = await getSoundInfoFromJson(soundName);
+    if (!soundInfo) {
+      return;
+    }
+    filename = soundInfo.filename;
+  }
+
+  chrome.runtime.sendMessage({
+    type: 'playSound',
+    soundUrl,
+    filename,
+    volume: clampVolume(volume),
+    isCustomSound
+  });
+}
+
+async function getSoundInfoFromJson(soundName) {
+  try {
+    const response = await fetch(chrome.runtime.getURL('sounds/sounds.json'));
+    const data = await response.json();
+    return data.sounds.find((sound) => sound.value === soundName);
+  } catch (error) {
+    console.error('Failed to load sounds.json:', error);
+    return null;
+  }
+}
+
+function clampVolume(value) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_SETTINGS.volume;
+  }
+  return Math.max(0, Math.min(100, parsed));
+}
+
+async function ensureOffscreenDocument() {
+  if (await chrome.offscreen.hasDocument()) {
+    return;
+  }
+
+  await chrome.offscreen.createDocument({
+    url: 'audio-player.html',
+    reasons: ['AUDIO_PLAYBACK'],
+    justification: 'Playing alarm sound'
+  });
+}
+
+async function loadSettings() {
+  return chrome.storage.local.get(DEFAULT_SETTINGS);
+}
+
+async function ensureInstalledAt() {
+  const { installedAt } = await chrome.storage.local.get('installedAt');
+  if (!installedAt) {
+    await chrome.storage.local.set({ installedAt: Date.now() });
+  }
+}
+
+async function incrementChimeCount() {
+  const { chimeCount = 0 } = await chrome.storage.local.get('chimeCount');
+  await chrome.storage.local.set({
+    chimeCount: chimeCount + 1,
+    lastChimeAt: Date.now()
+  });
+}
+
+async function setBadge(isActive) {
+  await chrome.action.setBadgeText({ text: isActive ? 'ON' : 'OFF' });
+  await chrome.action.setBadgeBackgroundColor({ color: isActive ? '#4CAF50' : '#9e9e9e' });
+}
+
+async function notifyNextChimeTime(alarmName, nextTime) {
+  const alarm = nextTime ? null : await chrome.alarms.get(alarmName);
+  const scheduledTime = nextTime || (alarm ? new Date(alarm.scheduledTime) : null);
+  if (!scheduledTime) {
+    return;
+  }
+
+  chrome.runtime.sendMessage({
+    type: 'updateNextChimeTime',
+    nextChimeTime: scheduledTime
+  }).catch(() => {});
+}
+
+function clearUninstallRedirect() {
+  chrome.runtime.setUninstallURL('');
+}
