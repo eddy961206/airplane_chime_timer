@@ -1,0 +1,26 @@
+Airplane Chime Timer is a free Chrome extension for hourly reminders, short breaks, and everyday routines. It plays airplane-style chimes without interrupting your screen with notifications.
+
+Choose how you want to be reminded:
+- Single timer: every 15 or 30 minutes, every hour, or a custom interval from 1 to 1,440 minutes.
+- Specific time: a one-time reminder or a daily repeating chime.
+- Dual timers: different sounds for short and long intervals, with the long chime taking priority when they coincide.
+
+Make the sound work for you:
+- Choose from the included chimes and test the sound before enabling the timer.
+- Adjust the volume, including mute.
+- Add your own MP3 or WAV file, up to 1 MB.
+- Check the next scheduled chime in the popup.
+
+Getting started:
+1. Pin the extension and open it from the toolbar.
+2. Choose a sound and interval, then test the volume.
+3. Turn Timer Active on. The badge changes to ON.
+An English/Korean quick-start guide is available from the popup.
+
+For a 25-minute reminder, choose Custom interval and enter 25. This is a repeating reminder, not an automatic 25/5 work-and-break cycle.
+
+Chrome must stay running and your computer must stay awake. Chimes can play while another app is in front, but sleep, a closed browser, or system scheduling can delay or prevent playback. Timing is not guaranteed to the second.
+
+No account is required. Timer settings and uploaded sounds are stored locally in Chrome. The extension does not send your browsing history or timer activity to an analytics service.
+
+Questions or suggestions: use the support link or email skykum2004@gmail.com.
