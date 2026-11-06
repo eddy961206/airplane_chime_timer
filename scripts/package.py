@@ -14,6 +14,7 @@ files = [
     'welcome.html', 'onboarding.js'
 ]
 files.extend(f'icons/icon{size}.png' for size in (16, 48, 128))
+files.extend(str(file.relative_to(root)) for file in sorted((root / '_locales').glob('*/messages.json')))
 files.append('sounds/sounds.json')
 catalog = json.loads((root / 'sounds/sounds.json').read_text(encoding='utf-8'))
 for sound in catalog['sounds']:
