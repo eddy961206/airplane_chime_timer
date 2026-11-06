@@ -27,6 +27,18 @@ async function fixture(initial = {}, { failMessage = false, configureChrome = ()
   const html = fs.readFileSync(path.join(root, 'popup.html'), 'utf8');
   const ids = Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m => [m[1], element('div', m[1])]));
   const modes = ['single', 'dual'].map(value => ({ ...element('input'), value, checked: value === 'single' }));
+  // 실제 HTML 라디오처럼 초기화에서 하나를 체크하면 같은 그룹의 다른 선택은 해제한다.
+  for (const mode of modes) {
+    let checked = mode.checked;
+    Object.defineProperty(mode, 'checked', {
+      enumerable: true,
+      get() { return checked; },
+      set(value) {
+        checked = Boolean(value);
+        if (checked) for (const other of modes) if (other !== mode) other.checked = false;
+      }
+    });
+  }
   const dualStatus = element();
   const document = {
     getElementById(id) { return ids[id]; }, createElement: element,

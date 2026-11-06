@@ -74,15 +74,53 @@
       throw new Error('Choose a valid interval.');
     }
   }
+  function activeTimerFields(settings) {
+    // 검증한 현재 모드/간격의 필드만 저장한다. 숨겨진 입력의 거절된 초안은 저장값을 덮지 않는다.
+    if (settings.timerMode === 'dual') return { timerMode: 'dual', dualTimer: settings.dualTimer };
+    const fields = { timerMode: 'single', interval: settings.interval };
+    if (settings.interval === 'custom') fields.customInterval = settings.customInterval;
+    if (settings.interval === 'specific') {
+      fields.specificTime = settings.specificTime;
+      fields.repeatDaily = settings.repeatDaily;
+    }
+    return fields;
+  }
+  function restoreInactiveFields(saved, submitted) {
+    // 새 입력이 이미 시작됐다면 이전 작업이 UI를 되돌리지 않는다. 숨긴 초안만 마지막 저장값으로 복구한다.
+    if (currentMode() !== submitted.timerMode) return;
+    if (submitted.timerMode === 'single' && byId('intervalSelect').value !== submitted.interval) return;
+    if (submitted.timerMode === 'dual') byId('intervalSelect').value = String(saved.interval);
+    if (submitted.timerMode === 'dual' || submitted.interval !== 'custom') {
+      byId('customIntervalInput').value = saved.customInterval;
+    }
+    if (submitted.timerMode === 'dual' || submitted.interval !== 'specific') {
+      byId('specificTimeInput').value = saved.specificTime;
+      byId('repeatDaily').checked = saved.repeatDaily === true;
+    }
+    if (submitted.timerMode === 'single') {
+      byId('shortIntervalSelect').value = saved.dualTimer.shortInterval;
+      byId('longIntervalSelect').value = saved.dualTimer.longInterval;
+      byId('shortTimerSound').value = saved.dualTimer.shortSound;
+      byId('longTimerSound').value = saved.dualTimer.longSound;
+    }
+    showInterval();
+  }
+  async function saveActiveTimer(settings, extra = {}) {
+    validate(settings);
+    const saved = await loadSettings();
+    const fields = activeTimerFields(settings);
+    await chrome.storage.local.set({ ...fields, ...extra });
+    restoreInactiveFields({ ...saved, ...fields }, settings);
+    return fields;
+  }
   function saveTimerForm() {
     // 입력 순간의 스냅샷을 저장해 뒤늦게 실행되는 작업이 새 입력을 덮지 않게 한다.
     const settings = readTimerForm();
     return enqueue(async () => {
-      validate(settings);
-      await chrome.storage.local.set(settings);
-      await notify(settings.timerMode === 'dual'
-        ? { type: 'updateDualTimer', dualTimer: settings.dualTimer }
-        : { action: 'updateAlarm', ...settings });
+      const fields = await saveActiveTimer(settings);
+      await notify(fields.timerMode === 'dual'
+        ? { type: 'updateDualTimer', dualTimer: fields.dualTimer }
+        : { action: 'updateAlarm', ...fields });
       status();
     });
   }
@@ -202,8 +240,8 @@
       const settings = readTimerForm();
       void enqueue(async () => {
         try {
-          if (isActive) validate(settings);
-          await chrome.storage.local.set(isActive ? { ...settings, isActive } : { isActive });
+          if (isActive) await saveActiveTimer(settings, { isActive });
+          else await chrome.storage.local.set({ isActive });
           await notify({ type: 'toggleTimer', isActive });
           status();
         } catch (error) {

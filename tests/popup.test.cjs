@@ -139,3 +139,82 @@ test('review prompt stays local and retains timing, cooldown, and dismiss contro
   assert.equal(f.state.reviewPrompt.dontAskAgain, true);
   assert.equal(f.ids.reviewPrompt.style.display, 'none');
 });
+
+test('switching modes preserves the last valid hidden settings and discards rejected drafts', async () => {
+  const f = await fixture({ interval: 'custom', customInterval: 25, specificTime: '09:30', repeatDaily: true,
+    dualTimer: { shortInterval: 20, longInterval: 60, shortSound: 'chime1', longSound: 'chime2' } });
+  await f.change('customIntervalInput', '0');
+  assert.equal(f.state.customInterval, 25);
+  await f.mode('dual');
+  assert.equal(f.state.customInterval, 25);
+  assert.equal(Number(f.ids.customIntervalInput.value), 25);
+  assert.equal(f.state.specificTime, '09:30');
+  assert.equal(f.state.repeatDaily, true);
+  assert.deepEqual(Object.keys(f.writes.at(-1)).sort(), ['dualTimer', 'timerMode']);
+
+  await f.change('longIntervalSelect', '45');
+  assert.equal(f.state.dualTimer.longInterval, 60);
+  await f.mode('single');
+  assert.equal(f.state.dualTimer.longInterval, 60);
+  assert.equal(Number(f.ids.longIntervalSelect.value), 60);
+  assert.equal(f.state.customInterval, 25);
+  assert.equal(f.ids.settingsStatus.textContent, '');
+  assert.deepEqual(Object.keys(f.writes.at(-1)).sort(), ['customInterval', 'interval', 'timerMode']);
+  await f.mode('dual');
+  assert.equal(f.state.timerMode, 'dual');
+  assert.equal(f.ids.settingsStatus.textContent, '');
+});
+
+test('switching interval types does not save rejected custom/time drafts', async () => {
+  const f = await fixture({ interval: 'custom', customInterval: 25, specificTime: '09:30', repeatDaily: true });
+  await f.change('customIntervalInput', '0');
+  await f.change('intervalSelect', '30');
+  assert.equal(f.state.customInterval, 25);
+  assert.equal(Number(f.ids.customIntervalInput.value), 25);
+  await f.change('intervalSelect', 'specific');
+  await f.change('specificTimeInput', '');
+  await f.change('intervalSelect', 'custom');
+  assert.equal(f.state.specificTime, '09:30');
+  assert.equal(f.ids.specificTimeInput.value, '09:30');
+  assert.equal(f.state.repeatDaily, true);
+  assert.equal(f.state.customInterval, 25);
+  assert.equal(f.ids.settingsStatus.textContent, '');
+});
+
+test('turning ON saves only the active settings even with invalid hidden inputs', async () => {
+  const single = await fixture({ interval: '15', customInterval: 25, specificTime: '09:30', repeatDaily: true,
+    dualTimer: { shortInterval: 20, longInterval: 60, shortSound: 'chime1', longSound: 'chime2' } });
+  single.ids.customIntervalInput.value = '0';
+  single.ids.specificTimeInput.value = '';
+  single.ids.repeatDaily.checked = false;
+  single.ids.longIntervalSelect.value = '45';
+  await single.change('timerToggle', true);
+  assert.equal(single.state.isActive, true);
+  assert.equal(single.state.customInterval, 25);
+  assert.equal(single.state.specificTime, '09:30');
+  assert.equal(single.state.repeatDaily, true);
+  assert.equal(single.state.dualTimer.longInterval, 60);
+  assert.deepEqual(Object.keys(single.writes.at(-1)).sort(), ['interval', 'isActive', 'timerMode']);
+
+  const dual = await fixture({ timerMode: 'dual', interval: 'custom', customInterval: 25 });
+  dual.ids.customIntervalInput.value = '0';
+  await dual.change('timerToggle', true);
+  assert.equal(dual.state.isActive, true);
+  assert.equal(dual.state.customInterval, 25);
+  assert.equal(Number(dual.ids.customIntervalInput.value), 25);
+  assert.deepEqual(Object.keys(dual.writes.at(-1)).sort(), ['dualTimer', 'isActive', 'timerMode']);
+});
+
+test('a settings storage failure does not notify the worker or overwrite the saved timing', async () => {
+  const f = await fixture({ interval: 'custom', customInterval: 25 });
+  const previousMessages = f.messages.length;
+  f.chrome.storage.local.set = async () => { throw new Error('Storage quota exceeded'); };
+  await f.change('customIntervalInput', '30');
+  assert.equal(f.state.customInterval, 25);
+  assert.equal(f.messages.length, previousMessages);
+  assert.match(f.ids.settingsStatus.textContent, /Storage quota exceeded/);
+  await f.change('timerToggle', true);
+  assert.equal(f.state.isActive, undefined);
+  assert.equal(f.ids.timerToggle.checked, false);
+  assert.equal(f.messages.length, previousMessages);
+});

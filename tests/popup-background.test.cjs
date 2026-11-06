@@ -95,3 +95,25 @@ test('a real worker scheduling error reaches the popup instead of a false succes
   assert.equal(popup.ids.timerToggle.checked, false);
   assert.equal(popup.ids.settingsStatus.textContent, '');
 });
+
+test('invalid hidden drafts cannot replace the saved schedule when switching modes and returning', async () => {
+  const background = harness();
+  const popup = await fixture({ isActive: true, interval: 'custom', customInterval: 25 }, {
+    configureChrome: connectBackground(background)
+  });
+  await popup.change('customIntervalInput', '0');
+  assert.equal(background.alarms.get('chimeAlarm').periodInMinutes, 25);
+  await popup.mode('dual');
+  assert.equal(popup.state.customInterval, 25);
+  assert.equal(background.alarms.get('longTimer').periodInMinutes, 60);
+  await popup.change('shortIntervalSelect', '20');
+  await popup.change('longIntervalSelect', '45');
+  await popup.mode('single');
+  assert.equal(popup.state.timerMode, 'single');
+  assert.equal(background.alarms.get('chimeAlarm').periodInMinutes, 25);
+  assert.equal(popup.state.dualTimer.longInterval, 60);
+  await popup.mode('dual');
+  assert.equal(background.alarms.get('shortTimer').periodInMinutes, 20);
+  assert.equal(background.alarms.get('longTimer').periodInMinutes, 60);
+  assert.equal(popup.ids.settingsStatus.textContent, '');
+});
