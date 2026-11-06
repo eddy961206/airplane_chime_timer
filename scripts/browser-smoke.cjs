@@ -6,6 +6,7 @@ const path = require('node:path');
 const { chromium } = require('playwright');
 const root = path.resolve(__dirname, '..');
 const { captureStoreArtwork } = require('./store-artwork.cjs');
+const { waitForBrowserState } = require('./wait-for-browser-state.cjs');
 
 (async () => {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'airplane-chime-qa-'));
@@ -85,7 +86,7 @@ const { captureStoreArtwork } = require('./store-artwork.cjs');
     // 실제 서비스 워커 → 오프스크린 문서 → 디코더 경로의 재생 시작 응답을 확인한다.
     const chimesBefore = (await getState()).chimeCount || 0;
     await control.evaluate(() => chrome.alarms.create('chimeAlarm', { when: Date.now() + 1000, periodInMinutes: 25 }));
-    await page.waitForFunction(async before => (await chrome.storage.local.get('chimeCount')).chimeCount > before, chimesBefore, { timeout: 65000 });
+    await waitForBrowserState(page, async before => (await chrome.storage.local.get('chimeCount')).chimeCount > before, chimesBefore, { timeout: 65000 });
 
     console.log('Smoke: scheduled built-in audio started');
     await page.locator('label.mode-radio').filter({ hasText: 'Dual Timer' }).click();
@@ -96,7 +97,7 @@ const { captureStoreArtwork } = require('./store-artwork.cjs');
     await page.screenshot({ path: path.join(output, '03-dual-timer.png'), fullPage: true });
     await captureStoreArtwork(page, context, output, 2);
     await page.selectOption('#shortIntervalSelect', '20');
-    await page.waitForFunction(async () => {
+    await waitForBrowserState(page, async () => {
       const alarms = await chrome.alarms.getAll();
       return alarms.length === 2 && alarms.find(alarm => alarm.name === 'shortTimer')?.periodInMinutes === 20
         && alarms.find(alarm => alarm.name === 'longTimer')?.periodInMinutes === 60;
@@ -106,12 +107,12 @@ const { captureStoreArtwork } = require('./store-artwork.cjs');
     await page.waitForFunction(() => /exact multiple/.test(document.getElementById('settingsStatus').textContent));
     assert.deepEqual(await getAlarms(), beforeInvalid);
     await page.locator('label.switch').click();
-    await page.waitForFunction(async () => (await chrome.alarms.getAll()).length === 0);
+    await waitForBrowserState(page, async () => (await chrome.alarms.getAll()).length === 0);
 
     console.log('Smoke: dual settings, validation, and OFF checked');
     // 실제 파일 선택/저장/디코딩을 검증한다. 파일명은 의도적으로 HTML처럼 보이게 한다.
     await page.locator('label.mode-radio').filter({ hasText: 'Single Timer' }).click();
-    await page.waitForFunction(async () => (await chrome.storage.local.get('timerMode')).timerMode === 'single');
+    await waitForBrowserState(page, async () => (await chrome.storage.local.get('timerMode')).timerMode === 'single');
     const samples = 800;
     const wav = Buffer.alloc(44 + samples * 2);
     wav.write('RIFF'); wav.writeUInt32LE(wav.length - 8, 4); wav.write('WAVEfmt ', 8);
@@ -123,22 +124,22 @@ const { captureStoreArtwork } = require('./store-artwork.cjs');
       page.waitForEvent('filechooser'), page.locator('#addCustomSound').click()
     ]);
     await chooser.setFiles({ name: '<img src=x onerror=alert(1)>.wav', mimeType: 'audio/wav', buffer: wav });
-    await page.waitForFunction(async () => (await chrome.storage.local.get('customSounds')).customSounds?.length === 1);
+    await waitForBrowserState(page, async () => (await chrome.storage.local.get('customSounds')).customSounds?.length === 1);
     const uploaded = (await getState()).customSounds[0];
     assert.match(uploaded.data, /^data:audio\/wav;base64,/);
     await page.locator('label.switch').click();
-    await page.waitForFunction(async () => (await chrome.alarms.getAll()).length === 1);
+    await waitForBrowserState(page, async () => (await chrome.alarms.getAll()).length === 1);
     const customChimesBefore = (await getState()).chimeCount || 0;
     await control.evaluate(() => chrome.alarms.create('chimeAlarm', { when: Date.now() + 1000, periodInMinutes: 25 }));
-    await page.waitForFunction(async before => (await chrome.storage.local.get('chimeCount')).chimeCount > before, customChimesBefore, { timeout: 65000 });
+    await waitForBrowserState(page, async before => (await chrome.storage.local.get('chimeCount')).chimeCount > before, customChimesBefore, { timeout: 65000 });
     await page.locator('label.switch').click();
-    await page.waitForFunction(async () => (await chrome.alarms.getAll()).length === 0);
+    await waitForBrowserState(page, async () => (await chrome.alarms.getAll()).length === 0);
     await control.evaluate(value => chrome.storage.local.set({ dualTimer: { shortInterval: 15, longInterval: 60, shortSound: value, longSound: value } }), uploaded.value);
     await openPopup();
     assert.equal(await page.locator('#soundOptions img').count(), 0);
     assert.ok((await page.locator('#soundOptions').textContent()).includes('<img src=x onerror=alert(1)>'));
     await page.locator('.sound-delete-btn').click();
-    await page.waitForFunction(async () => (await chrome.storage.local.get('customSounds')).customSounds.length === 0);
+    await waitForBrowserState(page, async () => (await chrome.storage.local.get('customSounds')).customSounds.length === 0);
     const repaired = await getState();
     assert.equal(repaired.selectedSound, 'chime1');
     assert.equal(repaired.dualTimer.shortSound, 'chime1');
@@ -153,19 +154,19 @@ const { captureStoreArtwork } = require('./store-artwork.cjs');
     await page.fill('#specificTimeInput', specificTime);
     await page.locator('#specificTimeInput').press('Tab');
     await page.locator('#repeatDaily').uncheck();
-    await page.waitForFunction(async time => {
+    await waitForBrowserState(page, async time => {
       const state = await chrome.storage.local.get(['interval', 'specificTime', 'repeatDaily']);
       return state.interval === 'specific' && state.specificTime === time && state.repeatDaily === false;
     }, specificTime);
     await page.locator('label.switch').click();
-    await page.waitForFunction(async () => {
+    await waitForBrowserState(page, async () => {
       const state = await chrome.storage.local.get('isActive');
       const alarm = await chrome.alarms.get('chimeAlarm');
       return state.isActive === true && alarm && alarm.periodInMinutes === undefined;
     });
     const oneShotChimesBefore = (await getState()).chimeCount || 0;
     await control.evaluate(() => chrome.alarms.create('chimeAlarm', { when: Date.now() + 1000 }));
-    await page.waitForFunction(async before => {
+    await waitForBrowserState(page, async before => {
       const state = await chrome.storage.local.get(['isActive', 'chimeCount']);
       return state.isActive === false && state.chimeCount > before && (await chrome.alarms.getAll()).length === 0;
     }, oneShotChimesBefore, { timeout: 65000 });
@@ -179,14 +180,14 @@ const { captureStoreArtwork } = require('./store-artwork.cjs');
 
     // 일일 알람은 DST/절전에 대비해 1440분 주기가 아닌 다음 현지 시각의 일회성 예약을 사용한다.
     await page.locator('#repeatDaily').check();
-    await page.waitForFunction(async () => (await chrome.storage.local.get('repeatDaily')).repeatDaily === true);
+    await waitForBrowserState(page, async () => (await chrome.storage.local.get('repeatDaily')).repeatDaily === true);
     await page.locator('label.switch').click();
-    await page.waitForFunction(async () => (await chrome.alarms.get('chimeAlarm'))?.scheduledTime > Date.now());
+    await waitForBrowserState(page, async () => (await chrome.alarms.get('chimeAlarm'))?.scheduledTime > Date.now());
     const dailyAlarm = (await getAlarms()).find(alarm => alarm.name === 'chimeAlarm');
     assert.equal(dailyAlarm.periodInMinutes, undefined);
     const dailyChimesBefore = (await getState()).chimeCount || 0;
     await control.evaluate(() => chrome.alarms.create('chimeAlarm', { when: Date.now() + 1000 }));
-    await page.waitForFunction(async ({ before, time }) => {
+    await waitForBrowserState(page, async ({ before, time }) => {
       const state = await chrome.storage.local.get(['isActive', 'chimeCount']);
       const alarm = await chrome.alarms.get('chimeAlarm');
       if (state.isActive !== true || state.chimeCount <= before || !alarm || alarm.periodInMinutes !== undefined
@@ -198,7 +199,7 @@ const { captureStoreArtwork } = require('./store-artwork.cjs');
     assert.equal((await getAlarms()).find(alarm => alarm.name === 'chimeAlarm').scheduledTime, dailyAlarm.scheduledTime);
     assert.equal(await page.locator('#timerToggle').isChecked(), true);
     await page.locator('label.switch').click();
-    await page.waitForFunction(async () => (await chrome.alarms.getAll()).length === 0);
+    await waitForBrowserState(page, async () => (await chrome.alarms.getAll()).length === 0);
     console.log('Smoke: daily audio stayed ON, rearmed at the configured local time, and turned OFF cleanly');
 
     assert.deepEqual(errors, []);
