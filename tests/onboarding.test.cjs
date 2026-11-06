@@ -159,3 +159,29 @@ test('future-day schedules include the date', async () => {
   const expected = new Date(scheduledTime).toLocaleString('en', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
   assert.equal(f.ids.scheduleStatus.textContent, 'Next scheduled chime: ' + expected);
 });
+
+
+test('non-audio custom data cannot be passed to the audio element', async () => {
+  const f = await fixture({ state: { selectedSound: 'custom_bad', customSounds: [{ value: 'custom_bad', data: 'data:text/html;base64,PGh0bWw+' }] } });
+  await f.click('testSelectedSound');
+  assert.equal(f.sounds.length, 0);
+  assert.match(f.ids.soundTestStatus.textContent, /^Could not play/);
+});
+
+test('starting a newer preview pauses old audio and ignores its late ended event', async () => {
+  const f = await fixture({ state: { timerMode: 'dual', dualTimer: { shortSound: 'chime1', longSound: 'chime2' } } });
+  await f.click('testSelectedSound');
+  const old = f.sounds[0];
+  await f.click('testLongSound');
+  assert.equal(old.paused, true);
+  old.events.ended();
+  assert.match(f.ids.soundTestStatus.textContent, /^Playing/);
+});
+
+test('sound selection preview can override the saved selected sound without enabling timer', async () => {
+  const f = await fixture();
+  f.doc.events['chime:preview']({ detail: { sound: 'chime4' } });
+  await tick();
+  assert.match(f.sounds[0].source, /tritone/);
+  assert.equal(f.writes.length, 0);
+});

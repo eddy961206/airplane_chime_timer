@@ -10,11 +10,17 @@ manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
 destination = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else root.parent / f"airplane-chime-timer-{manifest['version']}.zip"
 files = [
     'manifest.json', 'background.js', 'popup.html', 'popup.css', 'popup.js',
-    '692.js', '692.js.LICENSE.txt', 'audio-player.html', 'audio-player.js',
+    'audio-player.html', 'audio-player.js',
     'welcome.html', 'onboarding.js'
 ]
-for folder in ('icons', 'sounds'):
-    files.extend(str(path.relative_to(root)).replace('\\', '/') for path in (root / folder).rglob('*') if path.is_file())
+files.extend(f'icons/icon{size}.png' for size in (16, 48, 128))
+files.append('sounds/sounds.json')
+catalog = json.loads((root / 'sounds/sounds.json').read_text(encoding='utf-8'))
+for sound in catalog['sounds']:
+    filename = sound['filename']
+    if Path(filename).name != filename or '\\' in filename:
+        raise ValueError('Sound filename must remain inside sounds/')
+    files.append('sounds/' + filename)
 for filename in files:
     if not (root / filename).is_file():
         raise FileNotFoundError(filename)

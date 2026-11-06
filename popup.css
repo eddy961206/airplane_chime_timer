@@ -675,3 +675,7 @@ button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visibl
     outline-offset: 3px;
 }
 .switch input:focus-visible + .slider { outline: 2px solid #20608d; outline-offset: 3px; }
+
+.settings-status { font-size: 12px; line-height: 1.5; color: #8a3a13; margin: 8px 0 0; }
+.settings-status:empty { display: none; }
+.sound-options label span { overflow-wrap: anywhere; min-width: 0; }

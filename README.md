@@ -68,3 +68,20 @@ python scripts/package.py C:\\path\\to\\airplane-chime-timer-1.3.6.zip
 이번 변경은 듀얼 알람 중복 재생, 일회성 알람 완료 상태, 절전 복귀와 일일 예약, 빠른 ON/OFF 처리, 사용자 지정 오디오 재생을 개선한다. 팝업에서 소리를 미리 테스트하고 영어/한국어 사용 안내를 열 수 있다. 다음 알림은 실제 Chrome 예약 시각을 표시한다.
 
 Chrome과 컴퓨터가 실행 중이어야 알림을 받을 수 있다. 절전이나 브라우저 종료 상태에서 알림을 보장하지 않으며, Chrome 예약은 초 단위 정밀도를 보장하지 않는다. 25분 사용자 간격은 반복 차임이며 자동 25/5 뽀모도로 사이클은 아니다.
+
+## 1.3.7 보안 및 첫 사용 개선 후보
+
+현재 팝업은 읽을 수 있는 `popup.js`를 직접 실행하며 jQuery/webpack 번들을 사용하지 않습니다. `692.js`와 `thirdParty/`의 이전 파일은 런타임이나 배포 ZIP에 포함되지 않습니다. 기존 브랜치의 빌드 결과로 덮어쓰지 마세요.
+
+```sh
+node --test tests/*.test.cjs
+python scripts/package.py ../airplane-chime-timer-1.3.7.zip
+```
+
+사용자 소리 이름은 텍스트로만 표시합니다. 설정 저장을 한 경로로 통합해 팝업을 닫을 때 예약이 바뀌지 않으며, 잘못된 입력은 기존 예약을 유지합니다. 사용자 소리를 삭제하면 단일/듀얼 타이머의 참조도 기본 소리로 복구합니다. 추적 기능은 추가하지 않았습니다.
+
+- 변경점과 실제 Chrome 검증 목록: [release-1.3.7](docs/release-1.3.7.md)
+- 동의 기반 측정 검토안(미적용): [analytics-plan](docs/analytics-plan.md)
+- 스토어 문구·이미지 검토 목록: [review-checklist](store-assets/review-checklist.md)
+
+이 파일들의 준비는 스토어 게시를 의미하지 않습니다. Node 테스트는 API 모의 환경 검사이며, 실제 Chrome에서 소리 재생·절전 복귀를 확인하는 최종 점검은 별도로 필요합니다.

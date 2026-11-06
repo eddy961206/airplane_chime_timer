@@ -1,1 +1,263 @@
-(()=>{"use strict";var e,t={213(e,t,n){var a=n(692),i=n.n(a);const o=async function(e){await chrome.storage.local.set(e),void 0===e.selectedSound&&void 0===e.volume||chrome.runtime.sendMessage({type:"updateSound"})},s=async function(){return chrome.storage.local.get({isActive:!1,selectedSound:"chime1",interval:15,volume:50,customInterval:15,specificTime:"",repeatDaily:!1,timerMode:"single",dualTimer:{shortInterval:15,longInterval:60,shortSound:"chime1",longSound:"chime2"}})},l={config:{minDaysSinceInstall:3,minChimeCount:10,coolDownDays:14,maxPromptCount:3},getWebStoreUrl:function(){return`https://chromewebstore.google.com/detail/${chrome.runtime.id}/reviews`},loadState:async function(){return chrome.storage.local.get({installedAt:0,chimeCount:0,reviewPrompt:{dontAskAgain:!1,lastPromptAt:0,promptCount:0,clickedRateAt:0}})},saveState:async function(e){await chrome.storage.local.set({reviewPrompt:e})},initLinks:function(){const e=this.getWebStoreUrl();i()("#rateBtn").attr("href",e),i()("#rateNowBtn").attr("href",e)},shouldShowPrompt:function(e){const t=Date.now(),n=864e5,a=e.installedAt||0,i=e.chimeCount||0,o=e.reviewPrompt||{};if(!a)return!1;if(o.dontAskAgain)return!1;if(o.clickedRateAt)return!1;if((o.promptCount||0)>=this.config.maxPromptCount)return!1;if((t-a)/n<this.config.minDaysSinceInstall)return!1;if(i<this.config.minChimeCount)return!1;const s=o.lastPromptAt||0;return!((s?(t-s)/n:1/0)<this.config.coolDownDays)},showPrompt:async function(e){const t=Date.now(),n=e.reviewPrompt||{},a={...n,lastPromptAt:t,promptCount:(n.promptCount||0)+1};await this.saveState(a),i()("#reviewPrompt").show()},setupEventListeners:function(){i()("#rateNowBtn").on("click",async()=>{const{reviewPrompt:e}=await this.loadState();await this.saveState({...e,dontAskAgain:!0,clickedRateAt:Date.now()}),i()("#reviewPrompt").hide()}),i()("#rateLaterBtn").on("click",async()=>{const{reviewPrompt:e}=await this.loadState();await this.saveState({...e,lastPromptAt:Date.now()}),i()("#reviewPrompt").hide()}),i()("#rateNeverBtn").on("click",async()=>{const{reviewPrompt:e}=await this.loadState();await this.saveState({...e,dontAskAgain:!0}),i()("#reviewPrompt").hide()})},init:async function(){try{this.initLinks(),this.setupEventListeners();const e=await this.loadState();this.shouldShowPrompt(e)&&await this.showPrompt(e)}catch(e){console.error("ReviewManager 초기화 실패:",e)}}},r={validateIntervals:function(e,t){const n=parseInt(e),a=parseInt(t);return n>=a?{valid:!1,message:"Timer 1 interval must be shorter than Timer 2 interval."}:a%n===0?{valid:!0,message:`Setup complete: Timer 1 every ${n} minutes, Timer 2 every ${a} minutes with priority overlap`}:{valid:!1,message:`Timer 2 (${a} min) must be a multiple of Timer 1 (${n} min) for proper dual timer operation.`}},populateSoundSelects:async function(){const e=await c.getSoundFiles(),t=i()("#shortTimerSound"),n=i()("#longTimerSound");return t.empty(),n.empty(),e.forEach(e=>{const a=i()("<option>",{value:e.value,text:e.name});t.append(a.clone()),n.append(a.clone())}),e},updateValidationStatus:function(e){const t=i()(".dual-timer-status"),n=i()("#dualTimerValidation");t.removeClass("warning error"),e.valid?t.addClass("success"):t.addClass("error"),n.text(e.message)},saveDualTimerSettings:async function(){const e=parseInt(i()("#shortIntervalSelect").val()),t=parseInt(i()("#longIntervalSelect").val()),n=i()("#shortTimerSound").val(),a=i()("#longTimerSound").val(),s=this.validateIntervals(e,t);return this.updateValidationStatus(s),s.valid&&(await o({timerMode:"dual",dualTimer:{shortInterval:e,longInterval:t,shortSound:n,longSound:a}}),chrome.runtime.sendMessage({type:"updateDualTimer",dualTimer:{shortInterval:e,longInterval:t,shortSound:n,longSound:a}})),s.valid}},c={getSoundFiles:async function(){try{const e=await fetch(chrome.runtime.getURL("sounds/sounds.json")),t=await e.json(),{customSounds:n=[]}=await chrome.storage.local.get("customSounds");return[...t.sounds,...n]}catch(e){return console.error("사운드 파일 목록 로드 실패:",e),[]}},createSoundOptionsUI:async function(e){const t=await this.getSoundFiles(),n=i()("#soundOptions");return n.empty(),!e&&t.length>0&&(e=t[0].value,await o({selectedSound:e})),t.forEach(t=>{const a=i()("<label>"),o=i()("<input>",{type:"radio",name:"sound",value:t.value,checked:t.value===e});if(a.append(o),a.append(t.name),t.value.startsWith("custom_")){const e=i()("<button>",{class:"delete-btn sound-delete-btn",html:"&times;",title:"Delete sound"}).on("click",e=>{e.preventDefault(),this.deleteCustomSound(t.value)});a.append(e)}n.append(a)}),t},handleCustomSound:async function(e){try{if(e.size>1048576)throw new Error("File size cannot exceed 1MB");if(!e.type.startsWith("audio/"))throw new Error("Only audio files are allowed");const t=await this.fileToBase64(e),{customSounds:n=[]}=await chrome.storage.local.get("customSounds"),a={value:"custom_"+Date.now(),name:e.name.replace(/\.[^/.]+$/,""),filename:e.name,data:t};return n.push(a),await chrome.storage.local.set({customSounds:n}),await this.createSoundOptionsUI(a.value),a}catch(e){throw console.error("커스텀 사운드 처리 실패:",e),alert(e.message),e}},deleteCustomSound:async function(e){try{const{customSounds:t=[]}=await chrome.storage.local.get("customSounds"),n=t.filter(t=>t.value!==e);await chrome.storage.local.set({customSounds:n});const{selectedSound:a}=await chrome.storage.local.get("selectedSound"),i=a===e?"chime1":a;await o({selectedSound:i}),await this.createSoundOptionsUI(i)}catch(e){console.error("커스텀 사운드 삭제 실패:",e),alert("Failed to delete custom sound")}},fileToBase64:function(e){return new Promise((t,n)=>{const a=new FileReader;a.onload=()=>t(a.result),a.onerror=n,a.readAsDataURL(e)})}},u={audioElement:new Audio,blobUrl:null,async getSoundInfo(e){try{const t=await fetch(chrome.runtime.getURL("sounds/sounds.json"));return(await t.json()).sounds.find(t=>t.value===e)}catch(e){return console.error("sounds.json 로드 실패:",e),null}},playTestSound:async function(e,t){try{let n;if(this.blobUrl&&(URL.revokeObjectURL(this.blobUrl),this.blobUrl=null),e.startsWith("custom_")){const{customSounds:t=[]}=await chrome.storage.local.get("customSounds"),a=t.find(t=>t.value===e);if(!a)throw new Error("Custom sound not found.");const[i,o]=a.data.split(",");if(!o)throw new Error("Invalid audio data.");const s=i.match(/^data:(.*?);base64$/),l=s?s[1]:"audio/mpeg",r=atob(o),c=new Array(r.length);for(let e=0;e<r.length;e++)c[e]=r.charCodeAt(e);const u=new Uint8Array(c),m=new Blob([u],{type:l});this.blobUrl=URL.createObjectURL(m),n=this.blobUrl}else{const t=await this.getSoundInfo(e);if(!t)throw new Error(`Sound information not found: ${e}`);n=chrome.runtime.getURL(`sounds/${t.filename}`)}this.audioElement.src=n,this.audioElement.volume=t/100,await this.audioElement.play()}catch(e){console.error("사운드 재생 오류:",e),alert("An error occurred while playing the sound.")}finally{this.blobUrl&&(URL.revokeObjectURL(this.blobUrl),this.blobUrl=null)}},cleanup:function(){this.blobUrl&&(URL.revokeObjectURL(this.blobUrl),this.blobUrl=null)}},m={elements:{timerToggle:i()("#timerToggle"),intervalSelect:i()("#intervalSelect"),volumeSlider:i()("#volumeSlider"),volumeValue:i()("#volumeValue"),nextChimeTime:i()("#nextChimeTime"),sections:i()(".container .section").not(":first").not("#supportSection")},init:async function(){const e=await s();if(i()(`input[name="timerMode"][value="${e.timerMode}"]`).prop("checked",!0),this.toggleTimerMode(e.timerMode),"single"===e.timerMode)await c.createSoundOptionsUI(e.selectedSound);else{await r.populateSoundSelects(),i()("#shortIntervalSelect").val(e.dualTimer.shortInterval),i()("#longIntervalSelect").val(e.dualTimer.longInterval),i()("#shortTimerSound").val(e.dualTimer.shortSound),i()("#longTimerSound").val(e.dualTimer.longSound);const t=r.validateIntervals(e.dualTimer.shortInterval,e.dualTimer.longInterval);r.updateValidationStatus(t)}this.elements.timerToggle.prop("checked",e.isActive),this.elements.intervalSelect.val(e.interval),this.elements.volumeSlider.val(e.volume),this.elements.volumeValue.text(e.volume+"%"),this.updateSectionsState(e.isActive),"single"===e.timerMode?this.updateNextChimeTimeDisplay(e.interval):"dual"===e.timerMode&&e.dualTimer&&this.updateDualTimerNextChimeDisplay(e.dualTimer.shortInterval,e.dualTimer.longInterval),this.setupEventListeners(),l.init()},updateSectionsState:function(e){this.elements.sections.toggleClass("disabled",!e),i()(".next-chime-container").toggleClass("disabled",!e)},toggleTimerMode:function(e){"single"===e?(i()("#singleSoundSection").show(),i()("#singleTimerSection").show(),i()("#dualTimerSection").hide()):(i()("#singleSoundSection").hide(),i()("#singleTimerSection").hide(),i()("#dualTimerSection").show())},updateNextChimeTimeDisplay:function(e){const t=d(e,i()("#specificTimeInput").val(),i()("#customIntervalInput").val());t&&this.elements.nextChimeTime.text(t)},updateDualTimerNextChimeDisplay:function(e,t){const n=function(e,t){const n=new Date,a=n.getMinutes(),i=n.getSeconds(),o=parseInt(e),s=parseInt(t);let l=Math.ceil(a/o)*o-a-i/60;l<=0&&(l+=o);const r=new Date(n.getTime()+6e4*l);r.setSeconds(0,0);let c=Math.ceil(a/s)*s-a-i/60;c<=0&&(c+=s);const u=new Date(n.getTime()+6e4*c);u.setSeconds(0,0);const m=r<=u?r:u,d=m.getMinutes()%s===0?"Timer 2":m.getTime()===r.getTime()?"Timer 1":"Timer 2";return`${m.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})} (${d})`}(e,t);n&&this.elements.nextChimeTime.text(n)},setupEventListeners:function(){this.elements.timerToggle.on("change",async function(){const e=i()(this).prop("checked");await o({isActive:e}),chrome.runtime.sendMessage({type:"toggleTimer",isActive:e}),m.updateSectionsState(e)}),i()("#soundOptions").on("change",'input[name="sound"]',async function(){const e=i()(this).val();await o({selectedSound:e}),u.playTestSound(e,m.elements.volumeSlider.val())}),this.elements.intervalSelect.on("change",async function(){const e=i()(this).val();await o({interval:e}),m.updateNextChimeTimeDisplay(e),chrome.runtime.sendMessage({type:"updateInterval",interval:e})}),this.elements.volumeSlider.on("input",function(){const e=parseInt(i()(this).val());m.elements.volumeValue.text(e+"%")}),this.elements.volumeSlider.on("change",async function(){const e=parseInt(i()(this).val());await o({volume:e});const t=i()('input[name="sound"]:checked').val();u.playTestSound(t,e)}),i()("#customSoundInput").on("change",async function(e){const t=e.target.files[0];if(t)try{const e=await c.handleCustomSound(t);await o({selectedSound:e.value}),u.playTestSound(e.value,m.elements.volumeSlider.val())}catch(e){this.value=""}}),i()('input[name="timerMode"]').on("change",async function(){const e=i()(this).val();if(m.toggleTimerMode(e),"single"===e){const e=await s();await c.createSoundOptionsUI(e.selectedSound),await o({timerMode:"single"}),e.isActive&&chrome.runtime.sendMessage({action:"updateAlarm",interval:e.interval,customInterval:e.customInterval,specificTime:e.specificTime,repeatDaily:e.repeatDaily}),m.updateNextChimeTimeDisplay(i()("#intervalSelect").val())}else{await r.populateSoundSelects();const e=await s();e.dualTimer&&(i()("#shortIntervalSelect").val(e.dualTimer.shortInterval),i()("#longIntervalSelect").val(e.dualTimer.longInterval),i()("#shortTimerSound").val(e.dualTimer.shortSound),i()("#longTimerSound").val(e.dualTimer.longSound)),await o({timerMode:"dual"}),await r.saveDualTimerSettings();const t=i()("#shortIntervalSelect").val(),n=i()("#longIntervalSelect").val();m.updateDualTimerNextChimeDisplay(t,n)}}),i()("#shortIntervalSelect").on("change",async function(){await r.saveDualTimerSettings();const e=i()("#shortIntervalSelect").val(),t=i()("#longIntervalSelect").val();m.updateDualTimerNextChimeDisplay(e,t)}),i()("#longIntervalSelect").on("change",async function(){await r.saveDualTimerSettings();const e=i()("#shortIntervalSelect").val(),t=i()("#longIntervalSelect").val();m.updateDualTimerNextChimeDisplay(e,t)}),i()("#shortTimerSound, #longTimerSound").on("change",async function(){await r.saveDualTimerSettings();const e=i()(this).val();u.playTestSound(e,m.elements.volumeSlider.val())})}};function d(e,t,n){const a=new Date,i=a.getMinutes(),o=a.getSeconds();let s=null;if(!e)return"--:--";if("specific"===e&&t){const[e,n]=t.split(":").map(Number);s=new Date(a),s.setHours(e,n,0,0),s<=a&&s.setDate(s.getDate()+1)}else if("custom"===e){const e=Math.max(1,parseInt(n)||15);let t=Math.ceil(i/e)*e-i-o/60;t<=0&&(t+=e),s=new Date(a.getTime()+6e4*t),s.setSeconds(0,0)}else{const t=Math.max(1,parseInt(e)||15);let n=Math.ceil(i/t)*t-i-o/60;n<=0&&(n+=t),s=new Date(a.getTime()+6e4*n),s.setSeconds(0,0)}return s?s.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):"--:--"}i()(document).ready(()=>{m.init()}),window.addEventListener("unload",()=>{u.cleanup()}),i()(document).ready(async()=>{const e=i()("#intervalSelect"),t=i()("#customIntervalContainer"),n=i()("#specificTimeContainer"),a=i()("#customIntervalInput"),o=i()("#specificTimeInput"),s=i()("#repeatDaily"),l=i()("#nextChimeTime"),r=await chrome.storage.local.get(["interval","customInterval","specificTime","repeatDaily"]);async function c(){const t={...await chrome.storage.local.get(["interval","customInterval","specificTime","repeatDaily"]),interval:e.val()};if("custom"===e.val()){const e=parseInt(a.val())||15;t.customInterval=e}if("specific"===e.val()){const e=o.val(),n=s.prop("checked");t.specificTime=e,t.repeatDaily=n}await chrome.storage.local.set(t),await async function(e){await chrome.runtime.sendMessage({action:"updateAlarm",interval:e.interval,customInterval:parseInt(a.val()),specificTime:o.val(),repeatDaily:s.prop("checked")})}(t)}function u(){const t=d(e.val(),o.val(),a.val());t&&l.text(t)}r.interval&&(e.val(r.interval),t.toggle("custom"===r.interval),n.toggle("specific"===r.interval)),"custom"===r.interval&&r.customInterval&&a.val(r.customInterval),"specific"===r.interval&&r.specificTime&&(o.val(r.specificTime),s.prop("checked",!1!==r.repeatDaily)),u(),e.on("change",async()=>{const i=e.val();t.toggle("custom"===i),n.toggle("specific"===i),"custom"===i?a.val(r.customInterval||15):"specific"===i&&(o.val(r.specificTime||""),s.prop("checked",!1!==r.repeatDaily)),await c(),u()}),a.on("input",function(){let e;return function(...t){clearTimeout(e),e=setTimeout(()=>{clearTimeout(e),(async()=>{await c(),u()})(...t)},300)}}()),a.on("blur",async()=>{await c(),u()}),o.on("change",async()=>{await c(),u()}),s.on("change",async()=>{await c(),u()}),i()(window).on("beforeunload",async()=>{await c(),u()}),chrome.runtime.onMessage.addListener(e=>{if("updateNextChimeTime"===e.type){const t=new Date(e.nextChimeTime).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});i()("#nextChimeTime").text(t)}})})}},n={};function a(e){var i=n[e];if(void 0!==i)return i.exports;var o=n[e]={exports:{}};return t[e].call(o.exports,o,o.exports,a),o.exports}a.m=t,e=[],a.O=(t,n,i,o)=>{if(!n){var s=1/0;for(u=0;u<e.length;u++){for(var[n,i,o]=e[u],l=!0,r=0;r<n.length;r++)(!1&o||s>=o)&&Object.keys(a.O).every(e=>a.O[e](n[r]))?n.splice(r--,1):(l=!1,o<s&&(s=o));if(l){e.splice(u--,1);var c=i();void 0!==c&&(t=c)}}return t}o=o||0;for(var u=e.length;u>0&&e[u-1][2]>o;u--)e[u]=e[u-1];e[u]=[n,i,o]},a.n=e=>{var t=e&&e.__esModule?()=>e.default:()=>e;return a.d(t,{a:t}),t},a.d=(e,t)=>{for(var n in t)a.o(t,n)&&!a.o(e,n)&&Object.defineProperty(e,n,{enumerable:!0,get:t[n]})},a.o=(e,t)=>Object.prototype.hasOwnProperty.call(e,t),(()=>{var e={887:0};a.O.j=t=>0===e[t];var t=(t,n)=>{var i,o,[s,l,r]=n,c=0;if(s.some(t=>0!==e[t])){for(i in l)a.o(l,i)&&(a.m[i]=l[i]);if(r)var u=r(a)}for(t&&t(n);c<s.length;c++)o=s[c],a.o(e,o)&&e[o]&&e[o][0](),e[o]=0;return a.O(u)},n=globalThis.webpackChunkairplane_chime_timer=globalThis.webpackChunkairplane_chime_timer||[];n.forEach(t.bind(null,0)),n.push=t.bind(null,n.push.bind(n))})();var i=a.O(void 0,[692],()=>a(213));i=a.O(i)})();
+/* 팝업의 설정 저장 경로를 하나로 모아 중복 예약과 닫기 시 재예약을 방지한다. */
+(() => {
+  'use strict';
+  const defaults = {
+    isActive: false, selectedSound: 'chime1', interval: '15', volume: 50,
+    customInterval: 15, specificTime: '', repeatDaily: false, timerMode: 'single',
+    dualTimer: { shortInterval: 15, longInterval: 60, shortSound: 'chime1', longSound: 'chime2' }
+  };
+  const byId = (id) => document.getElementById(id);
+  const maxFileBytes = 1024 * 1024;
+  let sounds = [];
+  let operations = Promise.resolve();
+
+  function status(message = '') { byId('settingsStatus').textContent = message; }
+  // UI 이벤트 순서대로 저장한 뒤 서비스 워커의 완료 응답까지 기다린다.
+  function enqueue(operation) {
+    operations = operations.then(operation).catch((error) => {
+      status(error.message || 'Could not save settings. Close and reopen the popup.');
+      console.warn('설정 변경 실패:', error);
+    });
+    return operations;
+  }
+  async function notify(message) {
+    const response = await chrome.runtime.sendMessage(message);
+    if (!response?.ok) throw new Error(response?.error || 'Could not update the timer. Reopen the popup to retry.');
+  }
+  async function loadSettings() {
+    const state = await chrome.storage.local.get(defaults);
+    state.dualTimer = { ...defaults.dualTimer, ...(state.dualTimer || {}) };
+    return state;
+  }
+  function currentMode() { return document.querySelector('input[name="timerMode"]:checked').value; }
+  function preview(sound) { document.dispatchEvent(new CustomEvent('chime:preview', { detail: { sound } })); }
+  function showMode(mode) {
+    byId('singleSoundSection').hidden = mode !== 'single';
+    byId('singleTimerSection').hidden = mode !== 'single';
+    byId('dualTimerSection').hidden = mode !== 'dual';
+    byId('dualTimerSection').style.display = '';
+  }
+  function showInterval() {
+    byId('customIntervalContainer').style.display = byId('intervalSelect').value === 'custom' ? 'block' : 'none';
+    byId('specificTimeContainer').style.display = byId('intervalSelect').value === 'specific' ? 'block' : 'none';
+  }
+  function readTimerForm() {
+    return {
+      timerMode: currentMode(), interval: byId('intervalSelect').value,
+      customInterval: Number(byId('customIntervalInput').value),
+      specificTime: byId('specificTimeInput').value, repeatDaily: byId('repeatDaily').checked,
+      dualTimer: {
+        shortInterval: Number(byId('shortIntervalSelect').value), longInterval: Number(byId('longIntervalSelect').value),
+        shortSound: byId('shortTimerSound').value, longSound: byId('longTimerSound').value
+      }
+    };
+  }
+  function validate(settings) {
+    const dualStatus = byId('dualTimerValidation');
+    if (settings.timerMode === 'dual') {
+      const { shortInterval: short, longInterval: long } = settings.dualTimer;
+      const valid = Number.isInteger(short) && Number.isInteger(long) && short >= 1 && long <= 1440 && short < long && long % short === 0;
+      dualStatus.textContent = valid
+        ? `Timer 1 every ${short} minutes; Timer 2 every ${long} minutes. Timer 2 takes priority when both are due.`
+        : 'Timer 2 must be longer than, and an exact multiple of, Timer 1. The previous schedule is unchanged.';
+      document.querySelector('.dual-timer-status').classList.toggle('error', !valid);
+      if (!valid) throw new Error(dualStatus.textContent);
+    } else if (settings.interval === 'custom') {
+      if (!Number.isInteger(settings.customInterval) || settings.customInterval < 1 || settings.customInterval > 1440) {
+        throw new Error('Enter a whole number from 1 to 1,440 minutes. The previous schedule is unchanged.');
+      }
+    } else if (settings.interval === 'specific') {
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(settings.specificTime)) {
+        throw new Error('Choose a time before turning on this reminder. The previous schedule is unchanged.');
+      }
+    } else if (!['15', '30', '60'].includes(settings.interval)) {
+      throw new Error('Choose a valid interval.');
+    }
+  }
+  function saveTimerForm() {
+    // 입력 순간의 스냅샷을 저장해 뒤늦게 실행되는 작업이 새 입력을 덮지 않게 한다.
+    const settings = readTimerForm();
+    return enqueue(async () => {
+      validate(settings);
+      await chrome.storage.local.set(settings);
+      await notify(settings.timerMode === 'dual'
+        ? { type: 'updateDualTimer', dualTimer: settings.dualTimer }
+        : { action: 'updateAlarm', ...settings });
+      status();
+    });
+  }
+  async function refreshSounds(selected) {
+    const response = await fetch(chrome.runtime.getURL('sounds/sounds.json'));
+    const catalog = await response.json();
+    const { customSounds = [] } = await chrome.storage.local.get('customSounds');
+    sounds = [...catalog.sounds, ...(Array.isArray(customSounds) ? customSounds.filter((item) => item && typeof item.value === 'string' && item.value.startsWith('custom_') && typeof item.name === 'string') : [])];
+    const existing = await loadSettings();
+    const chosen = sounds.some((item) => item.value === selected) ? selected : defaults.selectedSound;
+    const options = byId('soundOptions');
+    options.replaceChildren();
+    for (const sound of sounds) {
+      const label = document.createElement('label');
+      const radio = document.createElement('input');
+      radio.type = 'radio'; radio.name = 'sound'; radio.value = sound.value; radio.checked = sound.value === chosen;
+      const name = document.createElement('span');
+      // 업로드 파일 이름은 HTML이 아니라 텍스트 노드로만 표시한다.
+      name.textContent = sound.name;
+      label.append(radio, name);
+      if (sound.value.startsWith('custom_')) {
+        const button = document.createElement('button');
+        button.type = 'button'; button.className = 'delete-btn sound-delete-btn'; button.textContent = '×';
+        button.title = 'Delete sound'; button.setAttribute('aria-label', `Delete ${sound.name}`);
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          void enqueue(() => deleteSound(sound.value));
+        });
+        label.append(button);
+      }
+      options.append(label);
+    }
+    for (const [id, field, fallback] of [['shortTimerSound', 'shortSound', 'chime1'], ['longTimerSound', 'longSound', 'chime2']]) {
+      const select = byId(id);
+      select.replaceChildren();
+      for (const sound of sounds) {
+        const option = document.createElement('option');
+        option.value = sound.value; option.textContent = sound.name; select.append(option);
+      }
+      select.value = sounds.some((sound) => sound.value === existing.dualTimer[field]) ? existing.dualTimer[field] : fallback;
+    }
+    // 삭제되었거나 손상된 소리 참조만 복구하며 실행 중인 예약 시각은 바꾸지 않는다.
+    const dualTimer = { ...existing.dualTimer, shortSound: byId('shortTimerSound').value, longSound: byId('longTimerSound').value };
+    if (chosen !== existing.selectedSound || dualTimer.shortSound !== existing.dualTimer.shortSound || dualTimer.longSound !== existing.dualTimer.longSound) {
+      await chrome.storage.local.set({ selectedSound: chosen, dualTimer });
+    }
+  }
+  async function deleteSound(value) {
+    const state = await loadSettings();
+    const { customSounds = [] } = await chrome.storage.local.get('customSounds');
+    const dualTimer = { ...state.dualTimer };
+    if (dualTimer.shortSound === value) dualTimer.shortSound = defaults.dualTimer.shortSound;
+    if (dualTimer.longSound === value) dualTimer.longSound = defaults.dualTimer.longSound;
+    const selectedSound = state.selectedSound === value ? defaults.selectedSound : state.selectedSound;
+    await chrome.storage.local.set({ customSounds: customSounds.filter((item) => item.value !== value), selectedSound, dualTimer });
+    await refreshSounds(selectedSound);
+    status('Sound deleted. Any timer using it now uses a built-in chime.');
+  }
+  function readFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Could not read this audio file. Try it again.'));
+      reader.readAsDataURL(file);
+    });
+  }
+  async function uploadSound(file) {
+    if (!file.size || file.size > maxFileBytes) throw new Error('Choose a non-empty audio file up to 1 MB.');
+    // OS가 MIME 유형을 제공하지 않는 MP3/WAV도 허용하되 저장되는 데이터 유형은 검증한다.
+    const mime = file.type || (/\.mp3$/i.test(file.name) ? 'audio/mpeg' : /\.wav$/i.test(file.name) ? 'audio/wav' : '');
+    if (!/^audio\/(mpeg|mp3|wav|x-wav|wave|vnd\.wave|ogg|mp4|x-m4a|aac|flac|x-flac|opus|webm)$/i.test(mime)) {
+      throw new Error('Choose a supported audio file, such as MP3 or WAV.');
+    }
+    const data = await readFile(new Blob([file], { type: mime }));
+    const { customSounds = [] } = await chrome.storage.local.get('customSounds');
+    const sound = { value: `custom_${crypto.randomUUID()}`, name: file.name.replace(/\.[^/.]+$/, '') || file.name, filename: file.name, data };
+    await chrome.storage.local.set({ customSounds: [...customSounds, sound], selectedSound: sound.value });
+    await refreshSounds(sound.value);
+    preview(sound.value);
+    status('Sound saved locally. Test it before relying on a reminder.');
+  }
+  async function initReviews() {
+    const url = `https://chromewebstore.google.com/detail/${chrome.runtime.id}/reviews`;
+    byId('rateBtn').href = url; byId('rateNowBtn').href = url;
+    const state = await chrome.storage.local.get({ installedAt: 0, chimeCount: 0, reviewPrompt: {} });
+    const review = state.reviewPrompt || {};
+    if (state.installedAt && Date.now() - state.installedAt >= 3 * 86400000 && state.chimeCount >= 10 && !review.dontAskAgain && !review.clickedRateAt && (review.promptCount || 0) < 3 && (!review.lastPromptAt || Date.now() - review.lastPromptAt >= 14 * 86400000)) {
+      await chrome.storage.local.set({ reviewPrompt: { ...review, lastPromptAt: Date.now(), promptCount: (review.promptCount || 0) + 1 } });
+      byId('reviewPrompt').style.display = 'block';
+    }
+    for (const id of ['rateNowBtn', 'rateLaterBtn', 'rateNeverBtn']) {
+      byId(id).addEventListener('click', () => { void enqueue(async () => {
+        const { reviewPrompt = {} } = await chrome.storage.local.get('reviewPrompt');
+        const change = id === 'rateLaterBtn' ? { lastPromptAt: Date.now() } : { dontAskAgain: true, ...(id === 'rateNowBtn' ? { clickedRateAt: Date.now() } : {}) };
+        await chrome.storage.local.set({ reviewPrompt: { ...reviewPrompt, ...change } });
+        byId('reviewPrompt').style.display = 'none';
+      }); });
+    }
+  }
+  async function init() {
+    const state = await loadSettings();
+    const mode = state.timerMode === 'dual' ? 'dual' : 'single';
+    document.querySelector(`input[name="timerMode"][value="${mode}"]`).checked = true;
+    byId('timerToggle').checked = state.isActive === true;
+    byId('intervalSelect').value = String(state.interval);
+    byId('customIntervalInput').value = state.customInterval;
+    byId('specificTimeInput').value = state.specificTime;
+    byId('repeatDaily').checked = state.repeatDaily === true;
+    byId('shortIntervalSelect').value = state.dualTimer.shortInterval;
+    byId('longIntervalSelect').value = state.dualTimer.longInterval;
+    byId('volumeSlider').value = Number.isFinite(Number(state.volume)) ? Math.max(0, Math.min(100, Number(state.volume))) : 50;
+    byId('volumeValue').textContent = `${byId('volumeSlider').value}%`;
+    await refreshSounds(state.selectedSound);
+    showMode(mode); showInterval();
+    byId('timerToggle').addEventListener('change', () => {
+      const isActive = byId('timerToggle').checked;
+      const settings = readTimerForm();
+      void enqueue(async () => {
+        try {
+          if (isActive) validate(settings);
+          await chrome.storage.local.set(isActive ? { ...settings, isActive } : { isActive });
+          await notify({ type: 'toggleTimer', isActive });
+          status();
+        } catch (error) {
+          byId('timerToggle').checked = (await loadSettings()).isActive;
+          throw error;
+        }
+      });
+    });
+    document.querySelectorAll('input[name="timerMode"]').forEach((input) => input.addEventListener('change', () => {
+      showMode(currentMode()); void saveTimerForm();
+    }));
+    byId('intervalSelect').addEventListener('change', () => { showInterval(); void saveTimerForm(); });
+    for (const id of ['customIntervalInput', 'specificTimeInput', 'repeatDaily', 'shortIntervalSelect', 'longIntervalSelect']) {
+      byId(id).addEventListener('change', () => { void saveTimerForm(); });
+    }
+    byId('soundOptions').addEventListener('change', (event) => {
+      if (event.target.name !== 'sound') return;
+      const selectedSound = event.target.value;
+      void enqueue(async () => { await chrome.storage.local.set({ selectedSound }); preview(selectedSound); status(); });
+    });
+    for (const [id, field] of [['shortTimerSound', 'shortSound'], ['longTimerSound', 'longSound']]) {
+      byId(id).addEventListener('change', () => {
+        const sound = byId(id).value;
+        void enqueue(async () => {
+          const { dualTimer } = await loadSettings();
+          await chrome.storage.local.set({ dualTimer: { ...dualTimer, [field]: sound } });
+          preview(sound); status();
+        });
+      });
+    }
+    byId('volumeSlider').addEventListener('input', () => { byId('volumeValue').textContent = `${byId('volumeSlider').value}%`; });
+    byId('volumeSlider').addEventListener('change', () => {
+      const volume = Number(byId('volumeSlider').value);
+      void enqueue(async () => {
+        await chrome.storage.local.set({ volume });
+        const state = await loadSettings(); preview(state.timerMode === 'dual' ? state.dualTimer.shortSound : state.selectedSound);
+      });
+    });
+    byId('addCustomSound').addEventListener('click', () => { byId('customSoundInput').click(); });
+    byId('customSoundInput').addEventListener('change', () => {
+      const file = byId('customSoundInput').files[0];
+      if (file) void enqueue(async () => {
+        try { await uploadSound(file); } finally { byId('customSoundInput').value = ''; }
+      });
+    });
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && changes.isActive) byId('timerToggle').checked = changes.isActive.newValue === true;
+    });
+    // 저장 직후 팝업이 닫혔어도 다음 열기에서 실제 예약을 복구한다.
+    byId('timerToggle').disabled = false;
+    await notify({ type: 'syncTimer' });
+    await initReviews();
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    void init().catch((error) => { status(`Setup could not finish: ${error.message}. Close and reopen the popup.`); console.warn(error); });
+  });
+})();

@@ -29,8 +29,21 @@ chrome.runtime.onStartup.addListener(() => {
   void handleStartup().catch(reportError);
 });
 
-chrome.runtime.onMessage.addListener((message) => {
-  void handleMessage(message).catch(reportError);
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // 오프스크린 재생 메시지와 다른 알림에는 응답하지 않아 올바른 수신자의 응답을 보존한다.
+  if (!isTimerMessage(message)) return false;
+  if (!isTrustedTimerSender(sender)) {
+    sendResponse({ ok: false, error: 'Untrusted timer message sender.' });
+    return false;
+  }
+  handleMessage(message).then(
+    () => sendResponse({ ok: true }),
+    (error) => {
+      reportError(error);
+      sendResponse({ ok: false, error: error.message || 'Unable to update the timer.' });
+    }
+  );
+  return true;
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -69,42 +82,54 @@ async function handleStartup() {
   });
 }
 
+function isTimerMessage(message) {
+  return message !== null && typeof message === 'object' && !Array.isArray(message)
+    && (message.action === 'updateAlarm'
+      || ['toggleTimer', 'updateDualTimer', 'syncTimer'].includes(message.type));
+}
+
+function isTrustedTimerSender(sender) {
+  return sender?.id === chrome.runtime.id
+    && ['popup.html', 'welcome.html'].some((page) => sender.url === chrome.runtime.getURL(page));
+}
+
+function validateTimerMessage(message) {
+  if (!isTimerMessage(message)) throw new Error('Invalid timer message.');
+  if (message.type === 'toggleTimer' && typeof message.isActive !== 'boolean') {
+    throw new Error('Timer activation must be a boolean.');
+  }
+  if (message.action === 'updateAlarm') {
+    validateSingleSettings(message);
+  } else if (message.type === 'updateDualTimer') {
+    validateDualTimer(message.dualTimer);
+  }
+}
+
 async function handleMessage(message) {
+  validateTimerMessage(message);
   return queueTimerOperation(() => applyMessage(message));
 }
 
 async function applyMessage(message) {
+  // UI가 저장한 최신 설정을 읽는다. 오래 대기한 메시지의 값으로 새 설정을 덮지 않는다.
+  const settings = await loadSettings();
   if (message.action === 'updateAlarm') {
-    const settings = await loadSettings();
-    // 꺼진 타이머의 편집이나 숨겨진 단일 모드 UI가 실행 중인 알람을 바꾸지 않게 한다.
-    if (!settings.isActive || settings.timerMode === 'dual') {
-      return;
-    }
-    await createSingleAlarm({
-      interval: message.interval,
-      customInterval: message.customInterval,
-      specificTime: message.specificTime,
-      repeatDaily: message.repeatDaily
-    });
+    if (!settings.isActive || settings.timerMode === 'dual') return;
+    await createSingleAlarm(settings);
+    await setBadge(true);
     return;
   }
 
-  if (message.type === 'toggleTimer') {
-    if (message.isActive) {
-      await restoreActiveTimer(true);
-    } else {
-      await clearAlarms();
-    }
-    const settings = await loadSettings();
-    await setBadge(settings.isActive);
+  if (message.type === 'toggleTimer' || message.type === 'syncTimer') {
+    await restoreActiveTimer(message.type === 'toggleTimer');
     return;
   }
 
-  if (message.type === 'updateDualTimer') {
-    const settings = await loadSettings();
-    if (settings.isActive && settings.timerMode === 'dual') {
-      await createDualTimerAlarm(message.dualTimer);
-    }
+  if (message.type === 'updateDualTimer' && settings.isActive && settings.timerMode === 'dual') {
+    validateDualTimer(settings.dualTimer);
+    // 소리만 바뀌었을 때는 이미 실행 중인 두 주기의 기준 시각을 유지한다.
+    if (!await hasMatchingDualAlarms(settings.dualTimer)) await createDualTimerAlarm(settings.dualTimer);
+    await setBadge(true);
   }
 }
 
@@ -189,74 +214,130 @@ async function pickSoundForAlarm(alarm, settings) {
   return null;
 }
 
+async function hasMatchingDualAlarms(dualTimer) {
+  const shortAlarm = await chrome.alarms.get('shortTimer');
+  const longAlarm = await chrome.alarms.get('longTimer');
+  return shortAlarm?.periodInMinutes === Number(dualTimer.shortInterval)
+    && longAlarm?.periodInMinutes === Number(dualTimer.longInterval);
+}
+
 async function restoreActiveTimer(reset = false) {
   const settings = await loadSettings();
-  await setBadge(settings.isActive);
-
   if (!settings.isActive) {
     await clearAlarms();
+    await setBadge(false);
     return;
   }
 
-  if (settings.timerMode === 'dual' && settings.dualTimer) {
-    if (!reset && settings.dualSchedule && await chrome.alarms.get('shortTimer') && await chrome.alarms.get('longTimer')) return;
-    await createDualTimerAlarm(settings.dualTimer);
-  } else {
-    const alarm = await chrome.alarms.get('chimeAlarm');
-    if (!reset && alarm) {
-      const isDaily = settings.interval === 'specific' && settings.repeatDaily;
-      // 지나간 알람은 Chrome의 지연 이벤트에 맡기고, 미래의 매일 예약만 현지 시각과 대조한다.
-      if (!isDaily || alarm.scheduledTime <= Date.now()
-        || (!alarm.periodInMinutes && alarm.scheduledTime === getNextSpecificTime(settings.specificTime).getTime())) return;
+  if (settings.timerMode === 'dual') {
+    validateDualTimer(settings.dualTimer);
+    if (reset || !settings.dualSchedule || !await hasMatchingDualAlarms(settings.dualTimer)) {
+      await createDualTimerAlarm(settings.dualTimer);
     }
-    await createSingleAlarm(settings);
+  } else {
+    validateSingleSettings(settings);
+    const alarm = await chrome.alarms.get('chimeAlarm');
+    let matches = false;
+    if (!reset && alarm) {
+      if (settings.interval === 'specific') {
+        // 지연된 일회성 알람은 Chrome 이벤트에 맡기고 미래의 일일 예약만 현지 시각과 비교한다.
+        matches = !alarm.periodInMinutes && (alarm.scheduledTime <= Date.now()
+          || alarm.scheduledTime === getNextSpecificTime(settings.specificTime).getTime());
+      } else {
+        matches = alarm.periodInMinutes === getSingleInterval(settings);
+      }
+    }
+    if (!matches) await createSingleAlarm(settings);
+  }
+  await setBadge(true);
+}
+
+function isValidInterval(value) {
+  return (typeof value === 'number' || (typeof value === 'string' && /^\d+$/.test(value)))
+    && Number.isInteger(Number(value)) && Number(value) >= MIN_INTERVAL_MINUTES
+    && Number(value) <= MAX_INTERVAL_MINUTES;
+}
+
+function getSingleInterval(settings) {
+  return Number(settings.interval === 'custom' ? settings.customInterval : settings.interval);
+}
+
+function validateSingleSettings(settings) {
+  if (settings.interval === 'specific') {
+    if (typeof settings.specificTime !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(settings.specificTime)) {
+      throw new Error('Choose a valid alarm time (HH:MM).');
+    }
+    if (settings.repeatDaily !== undefined && typeof settings.repeatDaily !== 'boolean') {
+      throw new Error('Daily repeat must be a boolean.');
+    }
+  } else if (!isValidInterval(settings.interval === 'custom' ? settings.customInterval : settings.interval)) {
+    throw new Error('The timer interval must be a whole number from 1 to 1440 minutes.');
+  }
+}
+
+function validateDualTimer(dualTimer) {
+  if (!dualTimer || typeof dualTimer !== 'object' || Array.isArray(dualTimer)
+    || !isValidInterval(dualTimer.shortInterval) || !isValidInterval(dualTimer.longInterval)) {
+    throw new Error('Both timer intervals must be whole numbers from 1 to 1440 minutes.');
+  }
+  const shortInterval = Number(dualTimer.shortInterval);
+  const longInterval = Number(dualTimer.longInterval);
+  if (shortInterval >= longInterval || longInterval % shortInterval !== 0) {
+    throw new Error('Timer 2 must be a larger multiple of Timer 1.');
+  }
+  if (![dualTimer.shortSound, dualTimer.longSound].every((sound) => typeof sound === 'string' && sound.length > 0 && sound.length <= 200)) {
+    throw new Error('Choose a sound for both timers.');
+  }
+}
+
+async function replaceAlarmSchedule(createSchedule) {
+  // 일시적인 Chrome API 오류는 한 번 재시도한다. 실패한 듀얼 예약을 반쪽 상태로 남기지 않는다.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await clearAlarms();
+      await createSchedule();
+      return;
+    } catch (error) {
+      if (attempt === 1) {
+        await clearAlarms().catch(reportError);
+        await setBadge(false).catch(reportError);
+        throw error;
+      }
+    }
   }
 }
 
 async function createSingleAlarm(settings) {
-  await clearAlarms();
-
-  const now = new Date();
-  let nextTime;
-
-  if (settings.interval === 'specific' && settings.specificTime) {
-    nextTime = getNextSpecificTime(settings.specificTime);
-    await chrome.alarms.create('chimeAlarm', {
-      when: nextTime.getTime()
-    });
-  } else {
-    const interval = settings.interval === 'custom'
-      ? clampInterval(settings.customInterval, DEFAULT_SETTINGS.customInterval)
-      : clampInterval(settings.interval, DEFAULT_SETTINGS.interval);
-    const delayInMinutes = getDelayToNextInterval(now, interval);
-    nextTime = new Date(now.getTime() + delayInMinutes * 60 * 1000);
-    nextTime.setSeconds(0, 0);
-    await chrome.alarms.create('chimeAlarm', {
-      delayInMinutes,
-      periodInMinutes: interval
-    });
-  }
-
-  await notifyNextChimeTime('chimeAlarm', nextTime);
+  // 유효하지 않은 편집 때문에 기존 예약이 사라지지 않도록 삭제 전에 검증한다.
+  validateSingleSettings(settings);
+  await replaceAlarmSchedule(async () => {
+    if (settings.interval === 'specific') {
+      await chrome.alarms.create('chimeAlarm', { when: getNextSpecificTime(settings.specificTime).getTime() });
+    } else {
+      const now = new Date();
+      const interval = getSingleInterval(settings);
+      await chrome.alarms.create('chimeAlarm', {
+        when: now.getTime() + getDelayToNextInterval(now, interval) * 60000,
+        periodInMinutes: interval
+      });
+    }
+  });
+  await notifyNextChimeTime('chimeAlarm');
 }
 
 async function createDualTimerAlarm(dualTimer) {
-  await clearAlarms();
-
-  const shortInterval = clampInterval(dualTimer?.shortInterval, DEFAULT_SETTINGS.dualTimer.shortInterval);
-  const longInterval = clampInterval(dualTimer?.longInterval, DEFAULT_SETTINGS.dualTimer.longInterval);
-  const now = new Date();
-  const nextLongTime = now.getTime() + getDelayToNextInterval(now, longInterval) * 60000;
-  await chrome.storage.local.set({ dualSchedule: { nextLongTime, lastLongTime: null } });
-
-  await chrome.alarms.create('shortTimer', {
-    when: now.getTime() + getDelayToNextInterval(now, shortInterval) * 60000,
-    periodInMinutes: shortInterval
-  });
-
-  await chrome.alarms.create('longTimer', {
-    when: nextLongTime,
-    periodInMinutes: longInterval
+  validateDualTimer(dualTimer);
+  await replaceAlarmSchedule(async () => {
+    const now = new Date();
+    const shortInterval = Number(dualTimer.shortInterval);
+    const longInterval = Number(dualTimer.longInterval);
+    const nextLongTime = now.getTime() + getDelayToNextInterval(now, longInterval) * 60000;
+    await chrome.alarms.create('shortTimer', {
+      when: now.getTime() + getDelayToNextInterval(now, shortInterval) * 60000,
+      periodInMinutes: shortInterval
+    });
+    await chrome.alarms.create('longTimer', { when: nextLongTime, periodInMinutes: longInterval });
+    await chrome.storage.local.set({ dualSchedule: { nextLongTime, lastLongTime: null } });
   });
 }
 
@@ -275,6 +356,7 @@ function getDelayToNextInterval(now, interval) {
 }
 
 function getNextSpecificTime(value) {
+  validateSingleSettings({ interval: 'specific', specificTime: value });
   const [hours, minutes] = value.split(':').map(Number);
   const next = new Date();
   next.setHours(hours, minutes, 0, 0);
@@ -293,43 +375,48 @@ function clampInterval(value, fallback) {
 }
 
 async function playSound(soundName, volume) {
-  await ensureOffscreenDocument();
-
+  if (typeof soundName !== 'string' || soundName.length > 200) return false;
   const isCustomSound = soundName.startsWith('custom_');
   let filename = '';
   let soundUrl = '';
 
   if (isCustomSound) {
     const { customSounds = [] } = await chrome.storage.local.get('customSounds');
-    const customSound = customSounds.find((sound) => sound.value === soundName);
-    if (!customSound) {
-      return false;
-    }
+    const customSound = Array.isArray(customSounds) && customSounds.find((sound) => sound?.value === soundName);
+    if (!customSound || typeof customSound.filename !== 'string' || typeof customSound.data !== 'string'
+      || customSound.data.length > 1400000) return false;
     filename = customSound.filename;
     soundUrl = customSound.data;
   } else {
     const soundInfo = await getSoundInfoFromJson(soundName);
-    if (!soundInfo) {
-      return false;
-    }
+    if (!soundInfo) return false;
     filename = soundInfo.filename;
   }
 
-  await chrome.runtime.sendMessage({
-    type: 'playSound',
-    soundUrl,
-    filename,
-    volume: clampVolume(volume),
-    isCustomSound
-  });
-  return true;
+  const message = { type: 'playSound', soundUrl, filename, volume: clampVolume(volume), isCustomSound };
+  // 문서 생성 직후 수신기가 아직 준비되지 않은 경우만 재전송하여 중복 재생을 피한다.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await ensureOffscreenDocument();
+    try {
+      const response = await chrome.runtime.sendMessage(message);
+      if (response?.ok !== true) {
+        console.error('Audio playback was not confirmed:', response?.error || 'No acknowledgment.');
+        return false;
+      }
+      return true;
+    } catch (error) {
+      if (attempt === 2 || !/Receiving end does not exist|Could not establish connection/i.test(error.message || '')) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
+    }
+  }
+  return false;
 }
 
 async function getSoundInfoFromJson(soundName) {
   try {
     const response = await fetch(chrome.runtime.getURL('sounds/sounds.json'));
     const data = await response.json();
-    return data.sounds.find((sound) => sound.value === soundName);
+    return Array.isArray(data.sounds) ? data.sounds.find((sound) => sound?.value === soundName) : null;
   } catch (error) {
     console.error('Failed to load sounds.json:', error);
     return null;
@@ -364,7 +451,11 @@ async function ensureOffscreenDocument() {
 }
 
 async function loadSettings() {
-  return chrome.storage.local.get(DEFAULT_SETTINGS);
+  const settings = await chrome.storage.local.get(DEFAULT_SETTINGS);
+  // 저장소가 손상되어도 문자열 'false' 등을 켜진 상태로 해석하지 않는다.
+  settings.isActive = settings.isActive === true;
+  settings.repeatDaily = settings.repeatDaily === true;
+  return settings;
 }
 
 async function ensureInstalledAt() {
@@ -377,7 +468,7 @@ async function ensureInstalledAt() {
 async function incrementChimeCount() {
   const { chimeCount = 0 } = await chrome.storage.local.get('chimeCount');
   await chrome.storage.local.set({
-    chimeCount: chimeCount + 1,
+    chimeCount: (Number.isSafeInteger(chimeCount) && chimeCount >= 0 ? chimeCount : 0) + 1,
     lastChimeAt: Date.now()
   });
 }
