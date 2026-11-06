@@ -115,9 +115,10 @@ const root = path.resolve(__dirname, '..');
     wav.writeUInt32LE(8000, 24); wav.writeUInt32LE(16000, 28); wav.writeUInt16LE(2, 32);
     wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(samples * 2, 40);
     for (let i = 0; i < samples; i++) wav.writeInt16LE(Math.round(1000 * Math.sin(i * 2 * Math.PI * 440 / 8000)), 44 + i * 2);
-    const chooser = page.waitForEvent('filechooser');
-    await page.locator('#addCustomSound').click();
-    await (await chooser).setFiles({ name: '<img src=x onerror=alert(1)>.wav', mimeType: 'audio/wav', buffer: wav });
+    const [chooser] = await Promise.all([
+      page.waitForEvent('filechooser'), page.locator('#addCustomSound').click()
+    ]);
+    await chooser.setFiles({ name: '<img src=x onerror=alert(1)>.wav', mimeType: 'audio/wav', buffer: wav });
     await page.waitForFunction(async () => (await chrome.storage.local.get('customSounds')).customSounds?.length === 1);
     const uploaded = (await getState()).customSounds[0];
     assert.match(uploaded.data, /^data:audio\/wav;base64,/);
