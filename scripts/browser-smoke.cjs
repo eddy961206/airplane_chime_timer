@@ -94,10 +94,30 @@ const root = path.resolve(__dirname, '..');
     await page.locator('label.switch').click();
     await page.waitForFunction(async () => (await chrome.alarms.getAll()).length === 0);
 
-    // 악성 모양의 파일명도 새 HTML 요소를 만들 수 없어야 한다.
-    await control.evaluate(() => chrome.storage.local.set({ timerMode: 'single', selectedSound: 'custom_qa', customSounds: [
-      { value: 'custom_qa', name: '<img src=x onerror=alert(1)>', filename: 'qa.wav', data: 'data:audio/wav;base64,UklGRg==' }
-    ], dualTimer: { shortInterval: 15, longInterval: 60, shortSound: 'custom_qa', longSound: 'custom_qa' } }));
+    // 실제 파일 선택/저장/디코딩을 검증한다. 파일명은 의도적으로 HTML처럼 보이게 한다.
+    await page.locator('label.mode-radio').filter({ hasText: 'Single Timer' }).click();
+    await page.waitForFunction(async () => (await chrome.storage.local.get('timerMode')).timerMode === 'single');
+    const samples = 800;
+    const wav = Buffer.alloc(44 + samples * 2);
+    wav.write('RIFF'); wav.writeUInt32LE(wav.length - 8, 4); wav.write('WAVEfmt ', 8);
+    wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
+    wav.writeUInt32LE(8000, 24); wav.writeUInt32LE(16000, 28); wav.writeUInt16LE(2, 32);
+    wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(samples * 2, 40);
+    for (let i = 0; i < samples; i++) wav.writeInt16LE(Math.round(1000 * Math.sin(i * 2 * Math.PI * 440 / 8000)), 44 + i * 2);
+    const chooser = page.waitForEvent('filechooser');
+    await page.locator('#addCustomSound').click();
+    await (await chooser).setFiles({ name: '<img src=x onerror=alert(1)>.wav', mimeType: 'audio/wav', buffer: wav });
+    await page.waitForFunction(async () => (await chrome.storage.local.get('customSounds')).customSounds?.length === 1);
+    const uploaded = (await getState()).customSounds[0];
+    assert.match(uploaded.data, /^data:audio\/wav;base64,/);
+    await page.locator('label.switch').click();
+    await page.waitForFunction(async () => (await chrome.alarms.getAll()).length === 1);
+    const customChimesBefore = (await getState()).chimeCount || 0;
+    await control.evaluate(() => chrome.alarms.create('chimeAlarm', { when: Date.now() + 1000, periodInMinutes: 25 }));
+    await page.waitForFunction(async before => (await chrome.storage.local.get('chimeCount')).chimeCount > before, customChimesBefore, { timeout: 65000 });
+    await page.locator('label.switch').click();
+    await page.waitForFunction(async () => (await chrome.alarms.getAll()).length === 0);
+    await control.evaluate(value => chrome.storage.local.set({ dualTimer: { shortInterval: 15, longInterval: 60, shortSound: value, longSound: value } }), uploaded.value);
     await openPopup();
     assert.equal(await page.locator('#soundOptions img').count(), 0);
     assert.ok((await page.locator('#soundOptions').textContent()).includes('<img src=x onerror=alert(1)>'));

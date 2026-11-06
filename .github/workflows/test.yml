@@ -1,11 +1,16 @@
 name: Extension regression checks
 on:
   push:
+    branches: [main]
   pull_request:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
   test:
+    timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,6 +25,7 @@ jobs:
       - run: python scripts/package.py /tmp/airplane-chime-timer.zip
 
   browser:
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
