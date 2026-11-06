@@ -40,7 +40,7 @@ npm run test:browser
 To use an already installed extension-capable Chromium instead:
 
 ```sh
-CHROME_BIN=/path/to/chromium node scripts/browser-smoke.cjs
+CHIME_CHROMIUM_EXECUTABLE=/path/to/chromium node scripts/browser-smoke.cjs
 ```
 
 It uses a new temporary profile, verifies actual extension/DOM integration, and writes screenshots into ignored `test-results/`. Set `HEADED=1` for a visible window. It never reads an existing personal browser profile. Review the captures before using them as store assets. Playback startup checks do not replace listening or sleep/wake QA.

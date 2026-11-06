@@ -14,7 +14,7 @@ const root = path.resolve(__dirname, '..');
   const context = await chromium.launchPersistentContext(profile, {
     headless: process.env.HEADED !== '1',
     locale: 'en-US',
-    ...(process.env.CHROME_BIN ? { executablePath: process.env.CHROME_BIN } : { channel: 'chromium' }),
+    ...(process.env.CHIME_CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHIME_CHROMIUM_EXECUTABLE } : { channel: 'chromium' }),
     ignoreDefaultArgs: ['--disable-extensions'],
     args: [`--disable-extensions-except=${root}`, `--load-extension=${root}`, '--enable-logging=stderr']
   });
