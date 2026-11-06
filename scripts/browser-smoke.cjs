@@ -16,6 +16,7 @@ const { waitForBrowserState } = require('./wait-for-browser-state.cjs');
   const context = await chromium.launchPersistentContext(profile, {
     headless: process.env.HEADED !== '1',
     locale: 'en-US',
+    deviceScaleFactor: 2,
     ...(process.env.CHIME_CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHIME_CHROMIUM_EXECUTABLE } : { channel: 'chromium' }),
     ignoreDefaultArgs: ['--disable-extensions'],
     args: [`--disable-extensions-except=${root}`, `--load-extension=${root}`, '--enable-logging=stderr']
