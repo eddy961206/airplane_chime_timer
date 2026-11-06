@@ -331,15 +331,8 @@ input[type="range"]::-webkit-slider-thumb:hover {
     margin-bottom: 8px;
 }
 
-.custom-sound-add input[type="file"] {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    opacity: 0;
-    cursor: pointer;
-}
+/* 파일 선택은 실제 버튼이 담당한다. 투명 입력이 버튼을 가로막지 않게 한다. */
+.custom-sound-add input[type="file"] { display: none; }
 
 .add-sound-btn {
     width: 100%;
@@ -675,3 +668,7 @@ button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visibl
     outline-offset: 3px;
 }
 .switch input:focus-visible + .slider { outline: 2px solid #20608d; outline-offset: 3px; }
+
+.settings-status { font-size: 12px; line-height: 1.5; color: #8a3a13; margin: 8px 0 0; }
+.settings-status:empty { display: none; }
+.sound-options label span { overflow-wrap: anywhere; min-width: 0; }

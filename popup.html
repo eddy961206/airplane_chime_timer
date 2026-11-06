@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <title>Airplane Chime Timer</title>
     <link rel="stylesheet" href="popup.css">
-    <script defer src="692.js"></script>
     <script defer src="popup.js"></script>
     <script defer src="onboarding.js"></script>
 </head>
@@ -21,15 +20,16 @@
     <div class="section">
         <div class="toggle-container">
             <label class="toggle-label" for="timerToggle" data-guide-key="timerActive">Timer Active</label>
-            <label class="switch"><input type="checkbox" id="timerToggle"><span class="slider round"></span></label>
+            <label class="switch"><input type="checkbox" id="timerToggle" disabled><span class="slider round"></span></label>
         </div>
-        <!-- 기존 번들의 DOM 참조는 유지하고 실제 알람 상태는 별도 영역에 표시한다. -->
+        <!-- 예약 상태는 실제 Chrome 알람을 조회해 표시한다. -->
         <div class="next-chime-container"><p>Next chime at: <span id="nextChimeTime">--:--</span></p></div>
         <div id="scheduleStatus" class="schedule-status" role="status" aria-live="polite" hidden></div>
         <div class="button-row preview-buttons">
             <button id="testSelectedSound" class="btn btn-secondary" type="button" data-guide-key="testSound">Test selected sound</button>
             <button id="testLongSound" class="btn btn-secondary" type="button" hidden>Test Timer 2</button>
         </div>
+        <p id="settingsStatus" class="settings-status" role="status" aria-live="polite"></p>
         <p id="soundTestStatus" class="guide-note" role="status" aria-live="polite"></p>
         <details class="quick-start-help">
             <summary data-guide-key="quickStart">Quick start · 3 steps</summary>
@@ -46,7 +46,7 @@
         <div id="soundOptions" class="sound-options"></div>
         <div class="custom-sound-upload">
             <h3>Custom Sound</h3>
-            <div class="custom-sound-add"><input type="file" id="customSoundInput" accept="audio/*" aria-label="Upload custom sound"><button id="addCustomSound" class="add-sound-btn"><span>Add Custom Sound</span></button></div>
+            <div class="custom-sound-add"><input type="file" id="customSoundInput" accept="audio/*" hidden aria-label="Upload custom sound"><button id="addCustomSound" class="add-sound-btn"><span>Add Custom Sound</span></button></div>
             <div class="custom-sound-info"><small>* Supported formats: MP3, WAV (max 1MB)</small><small>* Recommended duration: 1-3 seconds</small></div>
         </div>
     </div>

@@ -1,82 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
-
-const source = fs.readFileSync(path.join(__dirname, '..', 'background.js'), 'utf8');
-
-function harness(initial = {}, initialTime = '2026-10-02T10:10:00') {
-  let now = new Date(initialTime).getTime();
-  const data = { ...initial };
-  const alarms = new Map();
-  const messages = [];
-  const badges = [];
-  const created = [];
-  let offscreenExists = false;
-  let offscreenCreations = 0;
-  const event = () => ({ addListener() {} });
-  class Clock extends Date {
-    constructor(...args) { super(...(args.length ? args : [now])); }
-    static now() { return now; }
-  }
-  const chrome = {
-    runtime: {
-      onInstalled: event(), onStartup: event(), onMessage: event(),
-      getURL: (value) => value,
-      sendMessage: async (message) => { messages.push(message); },
-      setUninstallURL() {}
-    },
-    alarms: {
-      onAlarm: event(),
-      clearAll: async () => { alarms.clear(); },
-      get: async (name) => alarms.get(name),
-      create: async (name, options) => {
-        const alarm = { name, ...options, scheduledTime: options.when ?? now + options.delayInMinutes * 60000 };
-        alarms.set(name, alarm);
-        created.push(alarm);
-      }
-    },
-    storage: { local: {
-      get: async (keys) => {
-        if (typeof keys === 'string') return { [keys]: data[keys] };
-        if (Array.isArray(keys)) return Object.fromEntries(keys.map((key) => [key, data[key]]));
-        return Object.fromEntries(Object.entries(keys).map(([key, fallback]) => [
-          key, Object.hasOwn(data, key) ? data[key] : fallback
-        ]));
-      },
-      set: async (update) => { Object.assign(data, update); }
-    } },
-    offscreen: {
-      hasDocument: async () => offscreenExists,
-      createDocument: async () => {
-        offscreenCreations++;
-        await new Promise((resolve) => setImmediate(resolve));
-        if (offscreenExists) throw new Error('Only a single offscreen document may be created.');
-        offscreenExists = true;
-      }
-    },
-    action: {
-      setBadgeText: async ({ text }) => badges.push(text),
-      setBadgeBackgroundColor: async () => {}
-    },
-    tabs: { create() {} }
-  };
-  const context = vm.createContext({
-    chrome, Date: Clock, console,
-    fetch: async () => ({ json: async () => ({ sounds: [
-      { value: 'chime1', filename: 'short.mp3' },
-      { value: 'chime2', filename: 'long.mp3' }
-    ] }) })
-  });
-  vm.runInContext(source, context);
-  return {
-    context, chrome, data, alarms, messages, badges, created,
-    setTime(value) { now = new Date(value).getTime(); },
-    plays: () => messages.filter((message) => message.type === 'playSound'),
-    offscreenCreations: () => offscreenCreations
-  };
-}
+const { harness } = require('./helpers/background-harness.cjs');
 
 const dual = {
   isActive: true, timerMode: 'dual',
@@ -242,4 +166,162 @@ test('scheduled playback retains zero volume', async () => {
   const h = harness({ isActive: true, volume: 0 });
   await h.context.handleAlarm({ name: 'chimeAlarm', scheduledTime: Date.now() });
   assert.equal(h.plays()[0].volume, 0);
+});
+
+
+test('runtime messages require a trusted extension page and valid schema', async () => {
+  const h = harness({ isActive: true });
+  for (const sender of [undefined, {}, { id: 'another-extension', url: h.chrome.runtime.getURL('popup.html') },
+    { id: h.chrome.runtime.id, url: 'https://example.com/' },
+    { id: h.chrome.runtime.id, url: h.chrome.runtime.getURL('audio-player.html') }]) {
+    const replies = [];
+    h.chrome.runtime.onMessage.listeners[0]({ type: 'toggleTimer', isActive: true }, sender, (reply) => replies.push(reply));
+    assert.equal(replies[0].ok, false);
+  }
+  assert.equal((await h.dispatch({ type: 'toggleTimer', isActive: 'true' })).ok, false);
+  assert.equal(h.created.length, 0);
+  assert.equal((await h.dispatch({ type: 'toggleTimer', isActive: true })).ok, true);
+  assert.equal(h.created.length, 1);
+});
+
+test('runtime listener ignores unrelated notifications without stealing their response', () => {
+  const h = harness();
+  for (const message of [null, undefined, [], 'playSound', { type: 'playSound' }, { type: 'updateNextChimeTime' }]) {
+    let replied = false;
+    const result = h.chrome.runtime.onMessage.listeners[0](message, {}, () => { replied = true; });
+    assert.equal(result, false);
+    assert.equal(replied, false);
+  }
+});
+
+test('invalid single settings are rejected before deleting an existing schedule', async () => {
+  const h = harness({ isActive: true });
+  await h.context.handleStartup();
+  const original = h.alarms.get('chimeAlarm');
+  for (const settings of [
+    { interval: 'specific', specificTime: '' },
+    { interval: 'specific', specificTime: '24:00' },
+    { interval: 'specific', specificTime: '12:60' },
+    { interval: 'specific', specificTime: '1:00' },
+    { interval: 'custom', customInterval: 0 },
+    { interval: 'custom', customInterval: 1441 },
+    { interval: 'custom', customInterval: 1.5 },
+    { interval: '15trailing' }
+  ]) {
+    await assert.rejects(h.context.createSingleAlarm(settings));
+    assert.equal(h.alarms.get('chimeAlarm'), original);
+  }
+});
+
+test('invalid dual settings are rejected before deleting an existing schedule', async () => {
+  const h = harness({ isActive: true });
+  await h.context.handleStartup();
+  const original = h.alarms.get('chimeAlarm');
+  for (const config of [null, {}, { ...dual.dualTimer, shortInterval: 30, longInterval: 15 },
+    { ...dual.dualTimer, shortInterval: 15, longInterval: 20 },
+    { ...dual.dualTimer, longInterval: 1500 }, { ...dual.dualTimer, shortSound: null }]) {
+    await assert.rejects(h.context.createDualTimerAlarm(config));
+    assert.equal(h.alarms.get('chimeAlarm'), original);
+  }
+});
+
+test('queued setting messages use the latest saved settings', async () => {
+  const h = harness({ isActive: true, interval: '30' });
+  await h.context.handleMessage({ action: 'updateAlarm', interval: '15' });
+  assert.equal(h.alarms.get('chimeAlarm').periodInMinutes, 30);
+  h.data.isActive = false;
+  await h.context.handleMessage({ type: 'toggleTimer', isActive: true });
+  assert.equal(h.alarms.size, 0);
+  assert.equal(h.badges.at(-1), 'OFF');
+});
+
+test('dual sound-only edits keep the current alarm phase', async () => {
+  const h = harness(dual);
+  await h.context.handleStartup();
+  const shortDue = h.alarms.get('shortTimer').scheduledTime;
+  const longDue = h.alarms.get('longTimer').scheduledTime;
+  h.setTime('2026-10-02T10:16:00');
+  h.data.dualTimer = { ...dual.dualTimer, shortSound: 'chime2' };
+  await h.context.handleMessage({ type: 'updateDualTimer', dualTimer: h.data.dualTimer });
+  assert.equal(h.alarms.get('shortTimer').scheduledTime, shortDue);
+  assert.equal(h.alarms.get('longTimer').scheduledTime, longDue);
+  assert.equal(h.created.length, 2);
+});
+
+test('syncTimer repairs a missing or outdated schedule without resetting a matching one', async () => {
+  const h = harness({ isActive: true, interval: '30' });
+  assert.equal((await h.dispatch({ type: 'syncTimer' })).ok, true);
+  const due = h.alarms.get('chimeAlarm').scheduledTime;
+  h.setTime('2026-10-02T10:16:00');
+  await h.dispatch({ type: 'syncTimer' });
+  assert.equal(h.alarms.get('chimeAlarm').scheduledTime, due);
+  assert.equal(h.created.length, 1);
+  h.data.interval = '60';
+  await h.dispatch({ type: 'syncTimer' });
+  assert.equal(h.alarms.get('chimeAlarm').periodInMinutes, 60);
+  h.alarms.clear();
+  await h.dispatch({ type: 'syncTimer' });
+  assert.equal(h.alarms.size, 1);
+});
+
+test('alarm scheduling retries a transient failure and returns a success acknowledgment', async () => {
+  const h = harness({ isActive: true });
+  const create = h.chrome.alarms.create;
+  let attempts = 0;
+  h.chrome.alarms.create = async (...args) => {
+    if (++attempts === 1) throw new Error('Transient scheduling failure');
+    return create(...args);
+  };
+  assert.equal((await h.dispatch({ type: 'toggleTimer', isActive: true })).ok, true);
+  assert.equal(attempts, 2);
+  assert.equal(h.alarms.size, 1);
+});
+
+test('persistent dual scheduling failure returns an error and removes partial alarms', async () => {
+  const h = harness(dual);
+  const create = h.chrome.alarms.create;
+  h.chrome.alarms.create = async (name, options) => {
+    if (name === 'longTimer') throw new Error('Unable to create second timer');
+    return create(name, options);
+  };
+  const response = await h.dispatch({ type: 'toggleTimer', isActive: true });
+  assert.equal(response.ok, false);
+  assert.match(response.error, /Unable to create second timer/);
+  assert.equal(h.alarms.size, 0);
+  assert.equal(h.badges.at(-1), 'OFF');
+});
+
+test('failed or unacknowledged audio is never counted as a successful chime', async () => {
+  for (const response of [undefined, { ok: false, error: 'Audio cannot be decoded' }]) {
+    const h = harness({ isActive: true });
+    h.chrome.runtime.sendMessage = async () => response;
+    await h.context.handleAlarm({ name: 'chimeAlarm', scheduledTime: Date.now() });
+    assert.equal(h.data.chimeCount, undefined);
+  }
+});
+
+test('offscreen first-use delivery retries only missing-receiver failures', async () => {
+  const h = harness();
+  let attempts = 0;
+  h.chrome.runtime.sendMessage = async () => {
+    if (++attempts === 1) throw new Error('Could not establish connection. Receiving end does not exist.');
+    return { ok: true };
+  };
+  assert.equal(await h.context.playSound('chime1', 50), true);
+  assert.equal(attempts, 2);
+  assert.equal(h.offscreenCreations(), 1);
+
+  attempts = 0;
+  h.chrome.runtime.sendMessage = async () => {
+    attempts++;
+    throw new Error('The message port closed before a response was received.');
+  };
+  await assert.rejects(h.context.playSound('chime1', 50), /message port closed/);
+  assert.equal(attempts, 1, 'An uncertain delivery must not duplicate playback');
+});
+
+test('malformed custom sound storage and invalid identifiers do not create an audio document', async () => {
+  const h = harness({ customSounds: {} });
+  for (const sound of [null, {}, 5, 'custom_missing']) assert.equal(await h.context.playSound(sound, 50), false);
+  assert.equal(h.offscreenCreations(), 0);
 });

@@ -1,4 +1,4 @@
-/* 기존 팝업 번들을 수정하지 않고 안내, 실제 알람 조회, 수동 소리 테스트를 추가한다. */
+/* 안내, 실제 알람 조회, 수동/선택 소리 테스트를 담당한다. */
 (() => {
   'use strict';
 
@@ -82,6 +82,7 @@
   let lastTestMessage = '';
   let refreshVersion = 0;
   let preview;
+  let previewVersion = 0;
   const byId = (id) => document.getElementById(id);
   const text = (key) => messages[language][key];
 
@@ -151,7 +152,9 @@
     }
   }
 
-  async function testSound(longTimer = false) {
+  async function testSound(longTimer = false, overrideSound) {
+    const version = ++previewVersion;
+    if (preview) { preview.pause(); preview = null; }
     const buttons = [byId('testSelectedSound'), byId('testLongSound')];
     buttons.forEach((button) => { button.disabled = true; });
     try {
@@ -161,14 +164,16 @@
       });
       const volume = Math.max(0, Math.min(100, Number(byId('volumeSlider').value)));
       if (!volume) { showTestStatus('muted'); return; }
-      const sound = settings.timerMode === 'dual'
-        ? settings.dualTimer[longTimer ? 'longSound' : 'shortSound']
-        : settings.selectedSound;
+      const sound = overrideSound || (settings.timerMode === 'dual'
+        ? settings.dualTimer?.[longTimer ? 'longSound' : 'shortSound']
+        : settings.selectedSound);
+      if (typeof sound !== 'string') throw new Error('소리 선택이 올바르지 않아');
+      if (version !== previewVersion) return;
       showTestStatus('loading');
       let source;
       if (sound.startsWith('custom_')) {
-        source = settings.customSounds.find((item) => item.value === sound)?.data;
-        if (!source || !source.startsWith('data:audio/')) throw new Error('사용자 소리가 없어');
+        source = Array.isArray(settings.customSounds) && settings.customSounds.find((item) => item?.value === sound)?.data;
+        if (typeof source !== 'string' || source.length > 1400000 || !/^data:audio\/[a-z0-9.+-]+;base64,[a-z0-9+/]+={0,2}$/i.test(source)) throw new Error('사용자 소리가 없어');
       } else {
         const response = await fetch(chrome.runtime.getURL('sounds/sounds.json'));
         const catalog = await response.json();
@@ -176,18 +181,18 @@
         if (!entry) throw new Error('소리 목록에 없는 값이야');
         source = chrome.runtime.getURL(`sounds/${entry.filename}`);
       }
-      if (preview) preview.pause();
+      if (version !== previewVersion) return;
       preview = new Audio(source);
       preview.volume = volume / 100;
-      preview.addEventListener('ended', () => showTestStatus('finished'));
-      preview.addEventListener('error', () => showTestStatus('failed'));
+      preview.addEventListener('ended', () => { if (version === previewVersion) showTestStatus('finished'); });
+      preview.addEventListener('error', () => { if (version === previewVersion) showTestStatus('failed'); });
       await preview.play();
-      showTestStatus('playing');
+      if (version === previewVersion) showTestStatus('playing');
     } catch (error) {
-      showTestStatus('failed');
+      if (version === previewVersion) showTestStatus('failed');
       console.warn('소리 테스트 실패:', error);
     } finally {
-      buttons.forEach((button) => { button.disabled = false; });
+      if (version === previewVersion) buttons.forEach((button) => { button.disabled = false; });
     }
   }
 
@@ -210,6 +215,7 @@
     if (!byId('scheduleStatus')) return;
     document.querySelector('.next-chime-container').hidden = true;
     byId('scheduleStatus').hidden = false;
+    document.addEventListener('chime:preview', (event) => { void testSound(false, event.detail?.sound); });
     byId('testSelectedSound').addEventListener('click', () => { void testSound(); });
     byId('testLongSound').addEventListener('click', () => { void testSound(true); });
     chrome.storage.onChanged.addListener((changes, area) => {
@@ -226,6 +232,7 @@
     const refreshTimer = window.setInterval(() => { void refreshSchedule(); }, 2000);
     window.addEventListener('unload', () => {
       window.clearInterval(refreshTimer);
+      previewVersion += 1;
       if (preview) preview.pause();
     });
     await refreshSchedule();

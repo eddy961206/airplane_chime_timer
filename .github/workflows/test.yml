@@ -1,0 +1,49 @@
+name: Extension regression checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  test:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: node --test tests/*.test.cjs
+      - run: for file in background.js popup.js onboarding.js audio-player.js; do node --check "$file"; done
+      - run: python scripts/package.py /tmp/airplane-chime-timer.zip
+
+  browser:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      # ubuntu-latest already includes Chromium system libraries and Xvfb.
+      # Avoid downloading unrelated font packages on every smoke test.
+      - run: npx playwright install chromium
+      - run: xvfb-run -a npm run test:browser
+        env:
+          HEADED: '1'
+          DEBUG: 'pw:browser'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chrome-smoke-screenshots
+          path: test-results/
+          if-no-files-found: ignore
