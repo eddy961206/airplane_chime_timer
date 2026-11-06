@@ -18,6 +18,12 @@ const root = path.resolve(__dirname, '..');
     ignoreDefaultArgs: ['--disable-extensions'],
     args: [`--disable-extensions-except=${root}`, `--load-extension=${root}`, '--enable-logging=stderr']
   });
+  context.setDefaultTimeout(15000);
+  const logPage = page => page.on('console', message => {
+    if (message.type() === 'error' || message.type() === 'warning') console.error('Page console:', message.text());
+  });
+  context.pages().forEach(logPage);
+  context.on('page', logPage);
   try {
     let worker = context.serviceWorkers()[0];
     if (!worker) worker = await context.waitForEvent('serviceworker', { timeout: 10000 }).catch(() => null);
@@ -51,10 +57,12 @@ const root = path.resolve(__dirname, '..');
     const getState = () => control.evaluate(() => chrome.storage.local.get(null));
     const getAlarms = () => control.evaluate(() => chrome.alarms.getAll());
     await openPopup();
+    console.log('Smoke: fresh popup initialized');
     assert.equal(await page.locator('#timerToggle').isChecked(), false);
     assert.equal(await page.locator('#soundOptions label').count(), 5);
     await page.locator('#testSelectedSound').click();
     await page.waitForFunction(() => /Playing|Test finished/.test(document.getElementById('soundTestStatus').textContent));
+    console.log('Smoke: built-in preview started');
     await page.screenshot({ path: path.join(output, '01-first-use.png'), fullPage: true });
 
     await page.selectOption('#intervalSelect', 'custom');
@@ -63,6 +71,7 @@ const root = path.resolve(__dirname, '..');
     await page.locator('label.switch').click();
     await page.waitForFunction(() => /Next scheduled chime/.test(document.getElementById('scheduleStatus').textContent));
     assert.equal((await getState()).customInterval, 25);
+    console.log('Smoke: custom interval enabled');
     const firstAlarm = (await getAlarms()).find(x => x.name === 'chimeAlarm');
     assert.equal(firstAlarm.periodInMinutes, 25);
     await page.screenshot({ path: path.join(output, '02-custom-interval.png'), fullPage: true });
@@ -75,6 +84,7 @@ const root = path.resolve(__dirname, '..');
     await control.evaluate(() => chrome.alarms.create('chimeAlarm', { when: Date.now() + 1000, periodInMinutes: 25 }));
     await page.waitForFunction(async before => (await chrome.storage.local.get('chimeCount')).chimeCount > before, chimesBefore, { timeout: 65000 });
 
+    console.log('Smoke: scheduled built-in audio started');
     await page.locator('label.mode-radio').filter({ hasText: 'Dual Timer' }).click();
     await page.waitForFunction(() => /Timer 1:/.test(document.getElementById('scheduleStatus').textContent));
     const dual = await getAlarms();
@@ -94,6 +104,7 @@ const root = path.resolve(__dirname, '..');
     await page.locator('label.switch').click();
     await page.waitForFunction(async () => (await chrome.alarms.getAll()).length === 0);
 
+    console.log('Smoke: dual settings, validation, and OFF checked');
     // 실제 파일 선택/저장/디코딩을 검증한다. 파일명은 의도적으로 HTML처럼 보이게 한다.
     await page.locator('label.mode-radio').filter({ hasText: 'Single Timer' }).click();
     await page.waitForFunction(async () => (await chrome.storage.local.get('timerMode')).timerMode === 'single');
@@ -130,6 +141,14 @@ const root = path.resolve(__dirname, '..');
     assert.deepEqual(errors, []);
     console.log('Browser smoke checks passed. Screenshots: ' + output);
     console.log('This verifies playback startup, not human-audible output or sleep/wake behavior.');
+  } catch (error) {
+    for (const [index, page] of context.pages().entries()) {
+      if (page.url().startsWith('chrome-extension://')) {
+        console.error('Failure page:', page.url(), await page.locator('body').innerText({ timeout: 3000 }).catch(() => 'unavailable'));
+        await page.screenshot({ path: path.join(output, `failure-${index}.png`), fullPage: true }).catch(() => {});
+      }
+    }
+    throw error;
   } finally {
     await context.close();
     fs.rmSync(profile, { recursive: true, force: true });
