@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { chromium } = require('playwright');
 const root = path.resolve(__dirname, '..');
+const { captureStoreArtwork } = require('./store-artwork.cjs');
 
 (async () => {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'airplane-chime-qa-'));
@@ -64,6 +65,7 @@ const root = path.resolve(__dirname, '..');
     await page.waitForFunction(() => /Playing|Test finished/.test(document.getElementById('soundTestStatus').textContent));
     console.log('Smoke: built-in preview started');
     await page.screenshot({ path: path.join(output, '01-first-use.png'), fullPage: true });
+    await captureStoreArtwork(page, context, output, 0);
 
     await page.selectOption('#intervalSelect', 'custom');
     await page.fill('#customIntervalInput', '25');
@@ -75,6 +77,7 @@ const root = path.resolve(__dirname, '..');
     const firstAlarm = (await getAlarms()).find(x => x.name === 'chimeAlarm');
     assert.equal(firstAlarm.periodInMinutes, 25);
     await page.screenshot({ path: path.join(output, '02-custom-interval.png'), fullPage: true });
+    await captureStoreArtwork(page, context, output, 1);
     await page.goto('about:blank');
     await openPopup();
     assert.equal((await getAlarms()).find(x => x.name === 'chimeAlarm').scheduledTime, firstAlarm.scheduledTime);
@@ -91,6 +94,7 @@ const root = path.resolve(__dirname, '..');
     assert.equal(dual.length, 2);
     assert.deepEqual(dual.map(x => x.periodInMinutes).sort((a,b) => a-b), [15, 60]);
     await page.screenshot({ path: path.join(output, '03-dual-timer.png'), fullPage: true });
+    await captureStoreArtwork(page, context, output, 2);
     await page.selectOption('#shortIntervalSelect', '20');
     await page.waitForFunction(async () => {
       const alarms = await chrome.alarms.getAll();

@@ -1,26 +1,30 @@
-Airplane Chime Timer brings familiar airplane-style chimes to everyday reminders. Use a gentle sound cue to notice the hour, pause for a break, or return to your routine without a popup notification.
+Keep track of time with a familiar airplane-style chime. Airplane Chime Timer is a Chrome audio reminder for hourly cues, break reminders and everyday routines, without popup notifications.
 
-Choose a reminder:
-- Every 15 or 30 minutes, every hour, or a custom interval from 1 to 1,440 minutes.
-- A specific time of day, once or repeated daily.
-- Two intervals with different sounds. The longer timer takes priority when both are due together.
+Set a reminder that fits your day
+- Hourly or repeating reminders: choose every 15 minutes, 30 minutes or hour, or enter a custom interval from 1 to 1,440 minutes.
+- A specific time: schedule one sound cue, or repeat it daily.
+- Dual timers: give short and long intervals different sounds. The longer interval must be a multiple of the shorter one. When both are due together, the longer timer takes priority.
+- Check the actual next scheduled reminder in the extension popup. Close the popup after setup and keep Chrome running.
 
-Choose the sound:
-- Preview the included chimes before turning the timer on.
-- Adjust the volume, including mute. The included sounds vary in intensity; use a quieter chime and lower volume for a gentle reminder.
-- Add your own audio file up to 1 MB, such as MP3 or WAV. Playback depends on Chrome's supported audio formats.
-- Check the actual next scheduled reminder in the popup.
+Make the sound your own
+- Preview the included airplane-style sounds before turning the timer on.
+- Adjust the volume or mute it. Sounds vary in intensity, so preview your choice and use a lower volume if you prefer a softer cue.
+- Add your own audio file up to 1 MB, such as MP3 or WAV. Playback depends on the audio formats supported by Chrome.
 
-Start in three steps:
-1. Open Airplane Chime Timer from Chrome's Extensions menu and pin it if you like.
-2. Choose your sound, volume, and timing. Test the sound while the timer is OFF.
-3. Turn Timer Active on and check the scheduled chime.
-An English/Korean setup guide is available from the popup.
+Start in three steps
+1. Open Airplane Chime Timer from Chrome's Extensions menu. Pin it for easy access.
+2. Choose your sound, volume and timing. Test the sound while the timer is OFF.
+3. Turn Timer Active on and check the next scheduled chime.
+The setup guide and status guidance are available in English and Korean. Main timer controls are in English.
 
 For a 25-minute focus cue, choose Custom interval and enter 25. This repeats one interval; it does not automatically alternate 25-minute focus and 5-minute break sessions.
 
-Keep Chrome running and your computer awake. The popup can be closed after setup. Sleep, browser shutdown, or system scheduling can delay or prevent playback; exact second timing is not guaranteed. This is an everyday reminder, not a safety-critical alarm.
+No account. No tracking.
+Timer settings and custom audio stay in Chrome local storage. The extension has no product analytics and does not collect browsing history.
 
-No account is required, and no product analytics are collected. Timer settings and uploaded sounds are stored locally in Chrome. The extension does not send browsing history, uploaded audio, or timer activity to an analytics service.
+Before you rely on a reminder
+Keep Chrome running and your computer awake. Sleep, browser shutdown or system scheduling can delay or prevent playback. Exact second timing is not guaranteed. Use this for everyday reminders, not safety-critical alarms.
+
+Choose your sound, set your timing and turn on your first chime.
 
 Questions or suggestions: use the support link or email skykum2004@gmail.com.
