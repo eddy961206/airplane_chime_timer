@@ -143,6 +143,64 @@ const { captureStoreArtwork } = require('./store-artwork.cjs');
     assert.equal(repaired.selectedSound, 'chime1');
     assert.equal(repaired.dualTimer.shortSound, 'chime1');
     assert.equal(repaired.dualTimer.longSound, 'chime2');
+
+    // 시각과 반복 선택은 실제 UI로 저장한다. API는 이미 예약된 알람의 발화만 앞당긴다.
+    const specificTime = await page.evaluate(() => {
+      const time = new Date(Date.now() + 10 * 60000);
+      return `${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}`;
+    });
+    await page.selectOption('#intervalSelect', 'specific');
+    await page.fill('#specificTimeInput', specificTime);
+    await page.locator('#specificTimeInput').press('Tab');
+    await page.locator('#repeatDaily').uncheck();
+    await page.waitForFunction(async time => {
+      const state = await chrome.storage.local.get(['interval', 'specificTime', 'repeatDaily']);
+      return state.interval === 'specific' && state.specificTime === time && state.repeatDaily === false;
+    }, specificTime);
+    await page.locator('label.switch').click();
+    await page.waitForFunction(async () => {
+      const state = await chrome.storage.local.get('isActive');
+      const alarm = await chrome.alarms.get('chimeAlarm');
+      return state.isActive === true && alarm && alarm.periodInMinutes === undefined;
+    });
+    const oneShotChimesBefore = (await getState()).chimeCount || 0;
+    await control.evaluate(() => chrome.alarms.create('chimeAlarm', { when: Date.now() + 1000 }));
+    await page.waitForFunction(async before => {
+      const state = await chrome.storage.local.get(['isActive', 'chimeCount']);
+      return state.isActive === false && state.chimeCount > before && (await chrome.alarms.getAll()).length === 0;
+    }, oneShotChimesBefore, { timeout: 65000 });
+    await page.waitForFunction(() => !document.getElementById('timerToggle').checked);
+    await page.goto('about:blank');
+    await openPopup();
+    assert.equal((await getState()).isActive, false);
+    assert.equal(await page.locator('#timerToggle').isChecked(), false);
+    assert.deepEqual(await getAlarms(), []);
+    console.log('Smoke: one-shot audio completed, persisted OFF, and did not rearm on reopening');
+
+    // 일일 알람은 DST/절전에 대비해 1440분 주기가 아닌 다음 현지 시각의 일회성 예약을 사용한다.
+    await page.locator('#repeatDaily').check();
+    await page.waitForFunction(async () => (await chrome.storage.local.get('repeatDaily')).repeatDaily === true);
+    await page.locator('label.switch').click();
+    await page.waitForFunction(async () => (await chrome.alarms.get('chimeAlarm'))?.scheduledTime > Date.now());
+    const dailyAlarm = (await getAlarms()).find(alarm => alarm.name === 'chimeAlarm');
+    assert.equal(dailyAlarm.periodInMinutes, undefined);
+    const dailyChimesBefore = (await getState()).chimeCount || 0;
+    await control.evaluate(() => chrome.alarms.create('chimeAlarm', { when: Date.now() + 1000 }));
+    await page.waitForFunction(async ({ before, time }) => {
+      const state = await chrome.storage.local.get(['isActive', 'chimeCount']);
+      const alarm = await chrome.alarms.get('chimeAlarm');
+      if (state.isActive !== true || state.chimeCount <= before || !alarm || alarm.periodInMinutes !== undefined
+        || alarm.scheduledTime <= Date.now()) return false;
+      const next = new Date(alarm.scheduledTime);
+      return `${String(next.getHours()).padStart(2, '0')}:${String(next.getMinutes()).padStart(2, '0')}` === time;
+    }, { before: dailyChimesBefore, time: specificTime }, { timeout: 65000 });
+    // 앞당긴 발화는 설정한 시각 이전이므로 같은 미래 현지 시각으로 다시 예약되어야 한다.
+    assert.equal((await getAlarms()).find(alarm => alarm.name === 'chimeAlarm').scheduledTime, dailyAlarm.scheduledTime);
+    assert.equal(await page.locator('#timerToggle').isChecked(), true);
+    await page.locator('label.switch').click();
+    await page.waitForFunction(async () => (await chrome.alarms.getAll()).length === 0);
+    console.log('Smoke: daily audio stayed ON, rearmed at the configured local time, and turned OFF cleanly');
+
     assert.deepEqual(errors, []);
     console.log('Browser smoke checks passed. Screenshots: ' + output);
     console.log('This verifies playback startup, not human-audible output or sleep/wake behavior.');
